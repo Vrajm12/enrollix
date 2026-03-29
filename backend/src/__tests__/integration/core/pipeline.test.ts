@@ -3,10 +3,10 @@
  * Tests for lead status workflow and invalid transitions
  */
 
-import { mockPrisma, resetAllMocks } from '../../mocks';
-import { createMockLead } from '../../utils/test-helpers';
+import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
+import { createMockLead, createMockUser } from '../../utils/test-helpers.js';
 
-jest.mock('../../prisma', () => ({
+jest.mock('../../prisma.js', () => ({
   prisma: mockPrisma
 }));
 
@@ -300,7 +300,7 @@ describe('Lead Pipeline & Status Management', () => {
       mockPrisma.lead.findMany.mockResolvedValue(leads);
 
       const allLeads = await mockPrisma.lead.findMany();
-      const stageCounts = allLeads.reduce((acc, lead) => {
+      const stageCounts = allLeads.reduce((acc: Record<string, number>, lead: any) => {
         acc[lead.status] = (acc[lead.status] || 0) + 1;
         return acc;
       }, {} as Record<LeadStatus, number>);
@@ -326,7 +326,7 @@ describe('Lead Pipeline & Status Management', () => {
 
       const allLeads = await mockPrisma.lead.findMany();
       const totalLeads = allLeads.length;
-      const enrolledCount = allLeads.filter(l => l.status === 'ENROLLED').length;
+      const enrolledCount = allLeads.filter((l: any) => l.status === 'ENROLLED').length;
       const conversionRate = (enrolledCount / totalLeads) * 100;
 
       expect(conversionRate).toBe((1 / 7) * 100);

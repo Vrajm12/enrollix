@@ -3,10 +3,10 @@
  * Tests for cascading deletes, ordering, and concurrent updates
  */
 
-import { mockPrisma, resetAllMocks } from '../../mocks';
-import { createMockLead, createMockUser } from '../../utils/test-helpers';
+import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
+import { createMockLead, createMockUser } from '../../utils/test-helpers.js';
 
-jest.mock('../../prisma', () => ({
+jest.mock('../../prisma.js', () => ({
   prisma: mockPrisma
 }));
 
@@ -305,7 +305,7 @@ describe('Data Integrity Tests', () => {
       });
 
       expect(result.length).toBe(3);
-      expect(result.every(a => a.type === 'CALL')).toBe(true);
+      expect(result.every((a: any) => a.type === 'CALL')).toBe(true);
 
       // Verify order
       for (let i = 1; i < result.length; i++) {

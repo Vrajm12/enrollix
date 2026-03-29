@@ -3,10 +3,10 @@
  * Tests for activity creation, type handling, and timeline consistency
  */
 
-import { mockPrisma, resetAllMocks } from '../../mocks';
-import { createMockLead, createMockUser } from '../../utils/test-helpers';
+import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
+import { createMockLead, createMockUser } from '../../utils/test-helpers.js';
 
-jest.mock('../../prisma', () => ({
+jest.mock('../../prisma.js', () => ({
   prisma: mockPrisma
 }));
 
@@ -360,7 +360,7 @@ describe('Activity Logging', () => {
         where: { leadId: lead.id }
       });
 
-      const stats = result.reduce((acc, a) => {
+      const stats = result.reduce((acc: Record<string, number>, a: any) => {
         acc[a.type] = (acc[a.type] || 0) + 1;
         return acc;
       }, {} as Record<ActivityType, number>);

@@ -150,7 +150,7 @@ async function runDemo() {
 
           const updatedLead = await prisma.lead.update({
             where: { id: lead.id },
-            data: { status: newStage },
+            data: { status: newStage as any },
           });
 
           console.log(`    ✓ ${lead.name}: ${activityType} + moved to ${newStage}`);

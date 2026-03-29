@@ -3,10 +3,10 @@
  * Tests for follow-up scheduling, missed detection, and overdue tracking
  */
 
-import { mockPrisma, resetAllMocks } from '../../mocks';
-import { createMockLead, createMockSMSMessage } from '../../utils/test-helpers';
+import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
+import { createMockLead, createMockSMSMessage } from '../../utils/test-helpers.js';
 
-jest.mock('../../prisma', () => ({
+jest.mock('../../prisma.js', () => ({
   prisma: mockPrisma
 }));
 
@@ -367,7 +367,7 @@ describe('Follow-Up Management (CRITICAL)', () => {
       });
 
       const stats = {
-        overdue: allLeads.filter(l => {
+        overdue: allLeads.filter((l: any) => {
           const followUpDay = new Date(
             l.nextFollowUp!.getFullYear(),
             l.nextFollowUp!.getMonth(),
@@ -375,7 +375,7 @@ describe('Follow-Up Management (CRITICAL)', () => {
           );
           return followUpDay < today;
         }).length,
-        today: allLeads.filter(l => {
+        today: allLeads.filter((l: any) => {
           const followUpDay = new Date(
             l.nextFollowUp!.getFullYear(),
             l.nextFollowUp!.getMonth(),
@@ -383,7 +383,7 @@ describe('Follow-Up Management (CRITICAL)', () => {
           );
           return followUpDay.getTime() === today.getTime();
         }).length,
-        upcoming: allLeads.filter(l => {
+        upcoming: allLeads.filter((l: any) => {
           const followUpDay = new Date(
             l.nextFollowUp!.getFullYear(),
             l.nextFollowUp!.getMonth(),

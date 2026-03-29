@@ -79,7 +79,7 @@ async function runLoadTest() {
     console.log("\n📌 Benchmark 1: Creating 500 leads...\n");
 
     const createStartTime = Date.now();
-    const leadIds: string[] = [];
+    const leadIds: number[] = [];
 
     for (let i = 0; i < 500; i++) {
       const leadStart = Date.now();
@@ -89,9 +89,9 @@ async function runLoadTest() {
           name: `Load Test Lead ${i + 1}`,
           phone: `+919999${String(i).padStart(6, "0")}`,
           email: `load-test-${i}@example.com`,
-          status: "LEAD",
-          priority: i % 3 === 0 ? "HOT" : i % 3 === 1 ? "WARM" : "COLD",
-          assignedToId: counselor.id,
+          status: "LEAD" as const,
+          priority: i % 3 === 0 ? ("HOT" as const) : i % 3 === 1 ? ("WARM" as const) : ("COLD" as const),
+          assignedTo: counselor.id,
         },
       });
 
@@ -142,10 +142,10 @@ async function runLoadTest() {
     // ===== BENCHMARK 3: Status Filtering =====
     console.log("\n📌 Benchmark 3: Filtering by status...\n");
 
-    for (const status of ["LEAD", "CONTACTED", "INTERESTED"]) {
+    for (const status of ["LEAD" as const, "CONTACTED" as const, "INTERESTED" as const]) {
       const filterStart = Date.now();
       const filtered = await prisma.lead.findMany({
-        where: { status },
+        where: { status: status as any },
         take: 50,
       });
       const filterDuration = Date.now() - filterStart;
