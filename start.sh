@@ -1,2 +1,2 @@
 #!/bin/bash
-cd backend && node dist/index.js
+node dist/index.js
