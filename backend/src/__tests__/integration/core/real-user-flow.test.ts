@@ -4,10 +4,10 @@
  * If this test breaks, the CRM is useless!
  */
 
-import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
-import { createMockLead, createMockUser } from '../../utils/test-helpers.js';
+import { mockPrisma, resetAllMocks } from '../../mocks';
+import { createMockLead, createMockUser } from '../../utils/test-helpers';
 
-jest.mock('../../prisma.js', () => ({
+jest.mock('../../prisma', () => ({
   prisma: mockPrisma
 }));
 

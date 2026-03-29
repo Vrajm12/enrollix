@@ -3,10 +3,10 @@
  * Tests for follow-up scheduling, missed detection, and overdue tracking
  */
 
-import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
-import { createMockLead, createMockSMSMessage } from '../../utils/test-helpers.js';
+import { mockPrisma, resetAllMocks } from '../../mocks';
+import { createMockLead, createMockSMSMessage } from '../../utils/test-helpers';
 
-jest.mock('../../prisma.js', () => ({
+jest.mock('../../prisma', () => ({
   prisma: mockPrisma
 }));
 

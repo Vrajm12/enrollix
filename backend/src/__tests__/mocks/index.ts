@@ -51,9 +51,21 @@ export const mockPrismaActivityOperations = {
   count: jest.fn()
 };
 
+export const mockPrismaWhatsAppMessageOperations = {
+  findUnique: jest.fn(),
+  findFirst: jest.fn(),
+  findMany: jest.fn(),
+  create: jest.fn(),
+  createMany: jest.fn(),
+  update: jest.fn(),
+  delete: jest.fn(),
+  count: jest.fn()
+};
+
 export const mockPrisma = {
   lead: mockPrismaLeadOperations,
   sMSMessage: mockPrismaSMSMessageOperations,
+  whatsAppMessage: mockPrismaWhatsAppMessageOperations,
   user: mockPrismaUserOperations,
   activity: mockPrismaActivityOperations,
   $disconnect: jest.fn().mockResolvedValue(undefined)

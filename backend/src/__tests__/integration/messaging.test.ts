@@ -5,9 +5,9 @@
 
 import express from 'express';
 import request from 'supertest';
-import messagingRouter from '../../../routes/messaging.js';
-import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
-import { createMockLead, createMockUser, createMockSMSMessage } from '../../utils/test-helpers.js';
+import messagingRouter from '../../../routes/messaging';
+import { mockPrisma, resetAllMocks } from '../../mocks';
+import { createMockLead, createMockUser, createMockSMSMessage } from '../../utils/test-helpers';
 
 // Mock dependencies
 jest.mock('../../../prisma', () => ({

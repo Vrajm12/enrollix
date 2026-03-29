@@ -6,9 +6,9 @@
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
-import messagingRouter from '../../../routes/messaging.js';
-import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
-import { createMockUser, createMockLead, createMockSMSMessage } from '../../utils/test-helpers.js';
+import messagingRouter from '../../../routes/messaging';
+import { mockPrisma, resetAllMocks } from '../../mocks';
+import { createMockUser, createMockLead, createMockSMSMessage } from '../../utils/test-helpers';
 
 jest.mock('../../../prisma', () => ({
   prisma: mockPrisma

@@ -3,7 +3,7 @@
  * Tests for SMS sending and status checking functionality
  */
 
-import { twilioService } from '../../../services/twilio.js';
+import { twilioService } from '../../../services/twilio';
 
 // Mock Twilio client
 jest.mock('twilio', () => ({
