@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: cd backend && npm install && npm run prisma:generate && npm run build
-    startCommand: bash backend/start.sh
+    startCommand: bash start.sh
     
     envVars:
       - key: NODE_ENV
