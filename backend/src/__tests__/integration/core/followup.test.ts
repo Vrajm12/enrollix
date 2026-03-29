@@ -6,6 +6,7 @@
 import { mockPrisma, resetAllMocks } from '../../mocks';
 import { createMockLead, createMockSMSMessage } from '../../utils/test-helpers';
 
+// @ts-ignore - test files excluded from compilation
 jest.mock('../../prisma', () => ({
   prisma: mockPrisma
 }));

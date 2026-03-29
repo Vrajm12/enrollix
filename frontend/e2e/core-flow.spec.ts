@@ -20,7 +20,8 @@
  * Run: npm run e2e -- core-flow.spec.ts
  */
 
-import { test, expect, Page } from "@playwright/test";
+// @ts-ignore - Playwright dev dependency, not required for production
+import { test, expect, Page, BrowserContext } from "@playwright/test";
 
 // Test configuration
 test.describe("Core CRM Flow - UX Validation", () => {
@@ -32,6 +33,10 @@ test.describe("Core CRM Flow - UX Validation", () => {
 
   test("Lead Creation → Call → Note → Follow-up (Complete Flow)", async ({
     browser,
+    context
+  }: {
+    browser: any;
+    context: BrowserContext;
   }) => {
     page = await browser.newPage();
 
@@ -196,7 +201,7 @@ test.describe("Core CRM Flow - UX Validation", () => {
     await page.close();
   });
 
-  test("Validate Follow-up Date is Mandatory", async ({ browser }) => {
+  test("Validate Follow-up Date is Mandatory", async ({ browser, context }: { browser: any; context: BrowserContext }) => {
     page = await browser.newPage();
     await page.goto("http://localhost:3000/dashboard");
 

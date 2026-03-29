@@ -48,7 +48,7 @@ export function EnrollixLogo({
       opacity: 1,
       y: 0,
       transition: {
-        type: 'spring',
+        type: 'spring' as const,
         stiffness: 300,
         damping: 20,
       },
@@ -72,7 +72,7 @@ export function EnrollixLogo({
       scale: 1,
       rotate: 0,
       transition: {
-        type: 'spring',
+        type: 'spring' as const,
         stiffness: 200,
         damping: 15,
       },
@@ -82,7 +82,7 @@ export function EnrollixLogo({
       rotate: 360,
       transition: {
         duration: 0.6,
-        type: 'spring',
+        type: 'spring' as const,
       },
     },
   };

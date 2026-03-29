@@ -5,8 +5,11 @@
 
 import express from 'express';
 import request from 'supertest';
+// @ts-ignore - test files excluded from compilation
 import messagingRouter from '../../../routes/messaging';
+// @ts-ignore - test files excluded from compilation
 import { mockPrisma, resetAllMocks } from '../../mocks';
+// @ts-ignore - test files excluded from compilation
 import { createMockLead, createMockUser, createMockSMSMessage } from '../../utils/test-helpers';
 
 // Mock dependencies

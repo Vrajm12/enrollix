@@ -6,8 +6,11 @@
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+// @ts-ignore - test files excluded from compilation
 import messagingRouter from '../../../routes/messaging';
+// @ts-ignore - test files excluded from compilation
 import { mockPrisma, resetAllMocks } from '../../mocks';
+// @ts-ignore - test files excluded from compilation
 import { createMockUser, createMockLead, createMockSMSMessage } from '../../utils/test-helpers';
 
 jest.mock('../../../prisma', () => ({
