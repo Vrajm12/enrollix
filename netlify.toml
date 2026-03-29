@@ -1,9 +1,13 @@
 [build]
   command = "cd frontend && npm install && npm run build"
-  publish = "frontend/out"
+  functions = "frontend/.next/functions"
 
 [build.environment]
   NODE_VERSION = "22.22.0"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
 
 
 
