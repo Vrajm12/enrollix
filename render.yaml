@@ -5,6 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: cd backend && npm install && npm run prisma:generate && npm run build
+    preDeployCommand: cd backend && npx prisma migrate deploy && npx prisma db seed
     startCommand: cd backend && node dist/src/index.js
     
     envVars:
