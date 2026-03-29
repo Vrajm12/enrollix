@@ -1,0 +1,42 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="enrollixGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#3b82f6"/>
+      <stop offset="50%" stopColor="#2563eb"/>
+      <stop offset="100%" stopColor="#7c3aed"/>
+    </linearGradient>
+    
+    <filter id="enrollixShadow">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" floodOpacity="0.15"/>
+    </filter>
+  </defs>
+  
+  <!-- Outer circle background -->
+  <circle cx="100" cy="100" r="95" fill="url(#enrollixGradient)" opacity="0.1"/>
+  
+  <!-- Main shape group -->
+  <g filter="url(#enrollixShadow)">
+    <!-- Vertical bar of E -->
+    <rect x="60" y="40" width="16" height="120" fill="url(#enrollixGradient)" rx="4"/>
+    
+    <!-- Top horizontal bar -->
+    <rect x="76" y="40" width="80" height="16" fill="url(#enrollixGradient)" rx="4"/>
+    
+    <!-- Middle horizontal bar -->
+    <rect x="76" y="88" width="65" height="16" fill="url(#enrollixGradient)" rx="4"/>
+    
+    <!-- Bottom horizontal bar -->
+    <rect x="76" y="136" width="80" height="16" fill="url(#enrollixGradient)" rx="4"/>
+    
+    <!-- Arrow accent on right -->
+    <path d="M160 90 L190 100 L160 110" stroke="url(#enrollixGradient)" strokeWidth="8" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+  </g>
+  
+  <!-- Border circle -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="url(#enrollixGradient)" strokeWidth="2" opacity="0.2"/>
+  
+  <!-- Text: Enrollix -->
+  <text x="100" y="170" font-family="Arial, sans-serif" font-size="24" font-weight="bold" text-anchor="middle" fill="url(#enrollixGradient)">
+    Enrollix
+  </text>
+</svg>

@@ -1,0 +1,32 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" rx="10" fill="url(#gradient)"/>
+  
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#3b82f6"/>
+      <stop offset="50%" stopColor="#2563eb"/>
+      <stop offset="100%" stopColor="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- E shape -->
+  <g fill="white">
+    <!-- Vertical bar -->
+    <rect x="12" y="10" width="3.5" height="28" rx="1.5"/>
+    
+    <!-- Top horizontal -->
+    <rect x="15.5" y="10" width="14" height="3.5" rx="1.5"/>
+    
+    <!-- Middle horizontal -->
+    <rect x="15.5" y="21" width="11" height="3.5" rx="1.5"/>
+    
+    <!-- Bottom horizontal -->
+    <rect x="15.5" y="32" width="14" height="3.5" rx="1.5"/>
+  </g>
+  
+  <!-- Arrow accent -->
+  <g stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M32 19 L37 24 L32 29"/>
+    <line x1="27" y1="24" x2="36" y2="24"/>
+  </g>
+</svg>

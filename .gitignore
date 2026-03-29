@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.turbo
+.env
+.env.local
+backend/node_modules
+frontend/node_modules
+backend/dist
+frontend/.next
+backend/prisma/migrations

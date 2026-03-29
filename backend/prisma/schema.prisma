@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  COUNSELOR
+}
+
+enum LeadStatus {
+  LEAD
+  CONTACTED
+  INTERESTED
+  QUALIFIED
+  APPLIED
+  ENROLLED
+}
+
+enum ActivityType {
+  CALL
+  WHATSAPP
+  EMAIL
+  NOTE
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum MessageDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum Priority {
+  COLD
+  WARM
+  HOT
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  password      String
+  role          Role     @default(COUNSELOR)
+  leadsAssigned Lead[]   @relation("LeadAssignedTo")
+  whatsappMessages WhatsAppMessage[]
+  smsMessages   SMSMessage[]
+  reports       Report[]
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Lead {
+  id               Int         @id @default(autoincrement())
+  name             String
+  phone            String
+  email            String?
+  address          String?
+  parentContact    String?     @map("parent_contact")
+  course           String?
+  source           String?
+  status           LeadStatus  @default(LEAD)
+  priority         Priority    @default(COLD)
+  nextFollowUp     DateTime?   @map("next_follow_up")
+  assignedTo       Int?        @map("assigned_to")
+  assignedCounselor User?      @relation("LeadAssignedTo", fields: [assignedTo], references: [id])
+  activities       Activity[]
+  whatsappMessages WhatsAppMessage[]
+  smsMessages      SMSMessage[]
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  @@map("leads")
+}
+
+model Activity {
+  id           Int          @id @default(autoincrement())
+  leadId       Int          @map("lead_id")
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type         ActivityType
+  notes        String
+  createdAt    DateTime     @default(now()) @map("created_at")
+  nextFollowUp DateTime     @map("next_follow_up")
+
+  @@map("activities")
+}
+
+model WhatsAppMessage {
+  id              Int             @id @default(autoincrement())
+  leadId          Int             @map("lead_id")
+  lead            Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sentBy          Int             @map("sent_by")
+  user            User            @relation(fields: [sentBy], references: [id])
+  message         String
+  status          MessageStatus   @default(PENDING)
+  direction       MessageDirection
+  phoneNumber     String          @map("phone_number")
+  messageId       String?         @map("message_id")
+  mediaUrl        String?         @map("media_url")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@index([leadId])
+  @@index([sentBy])
+  @@map("whatsapp_messages")
+}
+
+model SMSMessage {
+  id              Int             @id @default(autoincrement())
+  leadId          Int             @map("lead_id")
+  lead            Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sentBy          Int             @map("sent_by")
+  user            User            @relation(fields: [sentBy], references: [id])
+  message         String
+  status          MessageStatus   @default(PENDING)
+  direction       MessageDirection
+  phoneNumber     String          @map("phone_number")
+  messageId       String?         @map("message_id")
+  provider        String          @default("twilio")
+  cost            Float?          @default(0)
+  errorCode       String?         @map("error_code")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  @@index([leadId])
+  @@index([sentBy])
+  @@map("sms_messages")
+}
+
+model Report {
+  id              Int             @id @default(autoincrement())
+  name            String
+  reportType      String          @map("report_type")
+  generatedBy     Int             @map("generated_by")
+  user            User            @relation(fields: [generatedBy], references: [id])
+  data            Json
+  filters         Json?
+  createdAt       DateTime        @default(now()) @map("created_at")
+
+  @@index([generatedBy])
+  @@map("reports")
+}
