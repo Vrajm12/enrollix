@@ -4,8 +4,6 @@ services:
     env: node
     region: oregon
     plan: free
-    rootDir: backend
-    
     buildCommand: cd backend && npm install && npm run prisma:generate && npm run build
     startCommand: cd backend && node dist/index.js
     
