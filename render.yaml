@@ -22,7 +22,7 @@ services:
       - key: PORT
         value: 4000
       - key: CORS_ORIGIN
-        value: https://enrollix-os.netlify.app, https://enrollix-frontend.vercel.app
+        value: https://enrollix-os.netlify.app
 
 databases:
   - name: enrollix-db
