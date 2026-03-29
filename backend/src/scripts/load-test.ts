@@ -259,10 +259,10 @@ async function runLoadTest() {
     // Cleanup
     console.log("🧹 Cleaning up test data...");
     await prisma.activity.deleteMany({
-      where: { lead: { assignedToId: counselor.id } },
+      where: { lead: { assignedTo: counselor.id } },
     });
     await prisma.lead.deleteMany({
-      where: { assignedToId: counselor.id },
+      where: { assignedTo: counselor.id },
     });
     console.log("✓ Test data removed\n");
   } catch (error) {

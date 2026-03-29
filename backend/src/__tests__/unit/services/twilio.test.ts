@@ -11,11 +11,9 @@ jest.mock('twilio', () => ({
   default: jest.fn(() => ({
     messages: {
       create: jest.fn(),
-      get: jest.fn()
-    },
-    messages: jest.fn().mockReturnValue({
+      get: jest.fn(),
       fetch: jest.fn()
-    })
+    }
   }))
 }));
 

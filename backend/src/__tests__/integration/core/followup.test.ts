@@ -234,7 +234,7 @@ describe('Follow-Up Management (CRITICAL)', () => {
       });
 
       const missedFollowUps = activities.filter(
-        a => new Date(a.nextFollowUp) < new Date()
+        (a: any) => new Date(a.nextFollowUp) < new Date()
       );
 
       expect(missedFollowUps.length).toBe(2);

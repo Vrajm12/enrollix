@@ -42,10 +42,20 @@ export const mockPrismaUserOperations = {
   delete: jest.fn()
 };
 
+export const mockPrismaActivityOperations = {
+  findUnique: jest.fn(),
+  findMany: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  delete: jest.fn(),
+  count: jest.fn()
+};
+
 export const mockPrisma = {
   lead: mockPrismaLeadOperations,
   sMSMessage: mockPrismaSMSMessageOperations,
   user: mockPrismaUserOperations,
+  activity: mockPrismaActivityOperations,
   $disconnect: jest.fn().mockResolvedValue(undefined)
 };
 

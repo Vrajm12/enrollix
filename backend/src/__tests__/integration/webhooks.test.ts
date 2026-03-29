@@ -9,7 +9,7 @@ import messagingRouter from '../../../routes/messaging.js';
 import { mockPrisma, resetAllMocks } from '../../mocks/index.js';
 import { createMockSMSMessage, createMockLead } from '../../utils/test-helpers.js';
 
-jest.mock('../../../prisma.js', () => ({
+jest.mock('../../../prisma', () => ({
   prisma: mockPrisma
 }));
 
