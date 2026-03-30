@@ -12,7 +12,7 @@ import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { PipelineProgress } from "@/components/PipelineProgress";
 import { ApiError, api } from "@/lib/api";
 import { clearSession, getToken, getUser } from "@/lib/auth";
-import { Lead, User } from "@/lib/types";
+import { Lead, LeadStatus, Priority, User } from "@/lib/types";
 import { Users, TrendingUp, Target, Zap } from "lucide-react";
 
 type Counselor = {
@@ -21,8 +21,6 @@ type Counselor = {
   email: string;
   role: "ADMIN" | "COUNSELOR";
 };
-
-const STATUSES = ["Lead", "Contacted", "Qualified", "Proposal", "Negotiation", "Closed"];
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -87,13 +85,13 @@ export default function DashboardPage() {
     }
   };
 
-  const handleUpdatePriority = async (leadId: number, priority: string) => {
+  const handleUpdatePriority = async (leadId: number, priority: Priority) => {
     setIsSaving(true);
     try {
-      await api.updateLeadPriority(leadId, priority as any);
+      await api.updateLeadPriority(leadId, priority);
       await loadDashboardData();
       if (selectedLead) {
-        setSelectedLead({ ...selectedLead, priority: priority as any });
+        setSelectedLead({ ...selectedLead, priority });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update priority");
@@ -102,13 +100,13 @@ export default function DashboardPage() {
     }
   };
 
-  const handleUpdateStatus = async (leadId: number, status: string) => {
+  const handleUpdateStatus = async (leadId: number, status: LeadStatus) => {
     setIsSaving(true);
     try {
-      await api.updateLeadStatus(leadId, status as any);
+      await api.updateLeadStatus(leadId, status);
       await loadDashboardData();
       if (selectedLead) {
-        setSelectedLead({ ...selectedLead, status: status as any });
+        setSelectedLead({ ...selectedLead, status });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update status");
@@ -143,12 +141,6 @@ export default function DashboardPage() {
       window.location.href = `mailto:${lead.email}`;
     }
   };
-
-  const pipelineColumns = STATUSES.map((status) => ({
-    status,
-    label: status,
-    leads: leads.filter((lead) => lead.status === status),
-  }));
 
   if (loading) {
     return (

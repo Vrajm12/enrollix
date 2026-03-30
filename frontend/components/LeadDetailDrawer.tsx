@@ -24,23 +24,23 @@ import {
   X,
   Calendar,
 } from 'lucide-react';
+import { LEAD_STATUSES } from '@/lib/constants';
 import { formatDate } from '@/lib/utils';
-import { Lead } from '@/lib/types';
+import { Lead, LeadStatus, Priority } from '@/lib/types';
 
 interface LeadDetailDrawerProps {
   lead: Lead | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onUpdatePriority?: (leadId: number, priority: string) => Promise<void>;
-  onUpdateStatus?: (leadId: number, status: string) => Promise<void>;
+  onUpdatePriority?: (leadId: number, priority: Priority) => Promise<void>;
+  onUpdateStatus?: (leadId: number, status: LeadStatus) => Promise<void>;
   onCall?: (lead: Lead) => void;
   onWhatsApp?: (lead: Lead) => void;
   onEmail?: (lead: Lead) => void;
   isLoading?: boolean;
 }
 
-const STATUSES = ['Lead', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Closed'];
-const PRIORITIES = ['COLD', 'WARM', 'HOT'];
+const PRIORITIES: Priority[] = ['COLD', 'WARM', 'HOT'];
 
 export function LeadDetailDrawer({
   lead,
@@ -158,10 +158,10 @@ export function LeadDetailDrawer({
                 <div>
                   <label className="text-xs text-gray-600 font-medium mb-1 block">Status</label>
                   <Select
-                    value={lead.status || 'Lead'}
+                    value={lead.status || 'LEAD'}
                     onValueChange={(value) => {
                       if (onUpdateStatus && value) {
-                        onUpdateStatus(lead.id, value);
+                        void onUpdateStatus(lead.id, value as LeadStatus);
                       }
                     }}
                     disabled={isLoading}
@@ -170,9 +170,9 @@ export function LeadDetailDrawer({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status}
+                      {LEAD_STATUSES.map((status) => (
+                        <SelectItem key={status.value} value={status.value}>
+                          {status.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -185,7 +185,7 @@ export function LeadDetailDrawer({
                     value={lead.priority || 'COLD'}
                     onValueChange={(value) => {
                       if (onUpdatePriority && value) {
-                        onUpdatePriority(lead.id, value);
+                        void onUpdatePriority(lead.id, value as Priority);
                       }
                     }}
                     disabled={isLoading}

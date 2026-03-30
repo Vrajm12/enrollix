@@ -106,7 +106,7 @@ export default function LeadDetailPage() {
   const onUpdateStatus = async (newStatus: Lead["status"]) => {
     setSavingStatus(true);
     try {
-      const updated = await api.updateLead(leadId, { status: newStatus });
+      const updated = await api.updateLeadStatus(leadId, newStatus);
       setLead(updated);
       setError(null);
     } catch (err) {
