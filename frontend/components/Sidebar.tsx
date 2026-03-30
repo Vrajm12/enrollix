@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
   LayoutDashboard,
@@ -17,9 +17,11 @@ import {
   LogOut,
 } from 'lucide-react';
 import { EnrollixLogoCompact } from '@/components/EnrollixLogo';
+import { clearSession } from '@/lib/auth';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(true);
 
   const menuItems = [
@@ -76,6 +78,11 @@ export default function Sidebar() {
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + '?');
+
+  const handleLogout = () => {
+    clearSession();
+    router.replace('/login');
+  };
 
   return (
     <>
@@ -218,12 +225,20 @@ export default function Sidebar() {
         <div className="border-t border-slate-700/50 p-4 space-y-2">
           <Link
             href="/settings"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all duration-200"
+            onClick={() => setIsOpen(false)}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+              isActive('/settings')
+                ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/20'
+                : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+            }`}
           >
             <Settings size={18} />
             <span className="text-sm font-medium">Settings</span>
           </Link>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-all duration-200">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-all duration-200"
+          >
             <LogOut size={18} />
             <span className="text-sm font-medium">Logout</span>
           </button>

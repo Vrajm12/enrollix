@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Upload, Send, Edit2, FileDown, CheckCircle, AlertCircle } from 'lucide-react';
+import Sidebar from '@/components/Sidebar';
 
 interface BulkMessage {
   id: number;
@@ -61,8 +62,10 @@ export default function BulkActionsPage() {
 
   return (
     <div className="flex bg-gradient-to-br from-slate-50 via-white to-slate-100 min-h-screen">
-      <main className="flex-1 flex flex-col">
-        <div className="flex-1 overflow-auto pt-20 pb-12">
+      <Sidebar />
+
+      <main className="flex-1 md:ml-60 flex flex-col">
+        <div className="flex-1 overflow-auto py-8 md:py-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             {/* Header */}
             <div className="mb-8">
