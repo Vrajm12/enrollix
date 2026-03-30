@@ -5,6 +5,7 @@ import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
 import activitiesRouter from "./routes/activities.js";
 import authRouter from "./routes/auth.js";
+import bulkRouter from "./routes/bulk.js";
 import dashboardRouter from "./routes/dashboard.js";
 import leadsRouter from "./routes/leads.js";
 import messagingRouter from "./routes/messaging.js";
@@ -44,6 +45,7 @@ app.use("/auth", authRouter);
 app.use("/dashboard", requireAuth, dashboardRouter);
 app.use("/leads", requireAuth, leadsRouter);
 app.use("/activities", requireAuth, activitiesRouter);
+app.use("/bulk", requireAuth, bulkRouter);
 
 // Middleware for messaging routes - skip auth for webhook
 app.use("/messaging", (req, res, next) => {

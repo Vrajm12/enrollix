@@ -92,6 +92,95 @@ export const api = {
       method: "PATCH",
       body: { nextFollowUp }
     }),
+  previewCsvImport: (csv: string) =>
+    request<{
+      headers: string[];
+      rows: {
+        rowNumber: number;
+        original: Record<string, string>;
+        normalized: {
+          name: string;
+          phone: string;
+          email: string | null;
+          address: string | null;
+          parentContact: string | null;
+          course: string | null;
+          source: string | null;
+          status: LeadStatus;
+          priority: Priority;
+          nextFollowUp: string | null;
+        } | null;
+        status: "ready" | "duplicate" | "error";
+        reasons: string[];
+      }[];
+      summary: {
+        totalRows: number;
+        readyRows: number;
+        duplicateRows: number;
+        errorRows: number;
+      };
+    }>("/bulk/import/csv/preview", {
+      method: "POST",
+      body: { csv }
+    }),
+  commitCsvImport: (csv: string) =>
+    request<{
+      message: string;
+      createdCount: number;
+      skippedCount: number;
+      duplicateCount: number;
+      errorCount: number;
+      created: Array<{
+        id: number;
+        name: string;
+        phone: string;
+        email: string | null;
+        status: LeadStatus;
+        priority: Priority;
+      }>;
+      skipped: Array<{
+        rowNumber: number;
+        name: string;
+        reason: string;
+      }>;
+    }>("/bulk/import/csv/commit", {
+      method: "POST",
+      body: { csv }
+    }),
+  bulkUpdateLeads: (payload: {
+    leadIds: number[];
+    updates: {
+      status?: LeadStatus;
+      priority?: Priority;
+      assignedTo?: number | null;
+      nextFollowUp?: string | null;
+    };
+  }) =>
+    request<{
+      message: string;
+      updatedCount: number;
+      requestedCount: number;
+      ignoredCount: number;
+    }>("/bulk/leads", {
+      method: "PATCH",
+      body: payload
+    }),
+  exportLeads: (payload: {
+    filters?: {
+      status?: LeadStatus;
+      priority?: Priority;
+      assignedTo?: number | null;
+    };
+    columns: string[];
+  }) =>
+    request<{
+      filename: string;
+      totalRows: number;
+      csv: string;
+    }>("/bulk/export", {
+      method: "POST",
+      body: payload
+    }),
 
   // Activities
   getActivities: (leadId: number) => request<Activity[]>(`/activities/${leadId}`),

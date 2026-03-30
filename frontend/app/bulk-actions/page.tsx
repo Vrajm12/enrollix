@@ -1,5 +1,9 @@
 'use client';
 
+export { default } from '@/components/bulk-actions/BulkActionsClient';
+
+/*
+
 import { useState } from 'react';
 import { Upload, Send, Edit2, FileDown, CheckCircle, AlertCircle } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
@@ -18,6 +22,21 @@ interface ImportedLead {
   phone: string;
   status: 'imported' | 'duplicate' | 'error';
 }
+
+const REQUIRED_CSV_COLUMNS = ['name', 'phone'];
+const OPTIONAL_CSV_COLUMNS = [
+  'sr_no',
+  'email',
+  'address',
+  'parent_contact',
+  'course',
+  'source',
+  'status',
+  'priority',
+  'next_follow_up',
+];
+const CSV_STATUS_OPTIONS = ['LEAD', 'CONTACTED', 'INTERESTED', 'QUALIFIED', 'APPLIED', 'ENROLLED'];
+const CSV_PRIORITY_OPTIONS = ['COLD', 'WARM', 'HOT'];
 
 export default function BulkActionsPage() {
   const [activeTab, setActiveTab] = useState<'import' | 'messaging' | 'updates' | 'export'>('import');
@@ -67,13 +86,13 @@ export default function BulkActionsPage() {
       <main className="flex-1 md:ml-60 flex flex-col">
         <div className="flex-1 overflow-auto py-8 md:py-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Header */}
+            [legacy Header]
             <div className="mb-8">
               <h1 className="text-4xl font-bold text-slate-900">Bulk Actions</h1>
               <p className="text-slate-600 mt-2">Manage multiple leads, import data, and send bulk messages</p>
             </div>
 
-            {/* Tabs */}
+            [legacy Tabs]
             <div className="flex gap-4 mb-8 border-b border-slate-200/50">
               {[
                 { id: 'import', label: '📥 Import CSV', icon: Upload },
@@ -95,10 +114,98 @@ export default function BulkActionsPage() {
               ))}
             </div>
 
-            {/* Import CSV Tab */}
+            [legacy Import CSV Tab]
             {activeTab === 'import' && (
               <div className="space-y-8">
-                {/* Upload Area */}
+                <div className="grid gap-6 lg:grid-cols-[1.2fr,0.8fr]">
+                  <div className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm">
+                    <div className="mb-4 flex items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">CSV Format Guide</h3>
+                        <p className="mt-1 text-sm text-slate-600">
+                          Share this standard format with clients so uploads stay clean and predictable.
+                        </p>
+                      </div>
+                      <a
+                        href="/lead-import-template.csv"
+                        download
+                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                      >
+                        <FileDown size={16} />
+                        Download Template
+                      </a>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Required headers</p>
+                        <div className="flex flex-wrap gap-2">
+                          {REQUIRED_CSV_COLUMNS.map((column) => (
+                            <span
+                              key={column}
+                              className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
+                            >
+                              {column}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Optional headers</p>
+                        <div className="flex flex-wrap gap-2">
+                          {OPTIONAL_CSV_COLUMNS.map((column) => (
+                            <span
+                              key={column}
+                              className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
+                            >
+                              {column}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm">
+                    <h3 className="text-lg font-bold text-slate-900">Accepted values</h3>
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status</p>
+                        <div className="flex flex-wrap gap-2">
+                          {CSV_STATUS_OPTIONS.map((status) => (
+                            <span
+                              key={status}
+                              className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
+                            >
+                              {status}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Priority</p>
+                        <div className="flex flex-wrap gap-2">
+                          {CSV_PRIORITY_OPTIONS.map((priority) => (
+                            <span
+                              key={priority}
+                              className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700"
+                            >
+                              {priority}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                        `next_follow_up` should be in ISO format like `2026-04-05T10:30:00.000Z`.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                [legacy Upload Area]
                 <div className="bg-white border-2 border-dashed border-blue-300 rounded-2xl p-12 text-center hover:border-blue-500 transition-colors cursor-pointer">
                   <input
                     type="file"
@@ -112,14 +219,14 @@ export default function BulkActionsPage() {
                     <p className="text-xl font-bold text-slate-900 mb-2">Drag and drop your CSV file</p>
                     <p className="text-sm text-slate-600 mb-4">or click to browse</p>
                     <p className="text-xs text-slate-500">
-                      Expected columns: Name, Email, Phone (optional: Status, Priority)
+                      Template headers: {REQUIRED_CSV_COLUMNS.concat(OPTIONAL_CSV_COLUMNS).join(', ')}
                     </p>
                   </label>
                 </div>
 
                 {csvFile && (
                   <>
-                    {/* Upload Stats */}
+                    [legacy Upload Stats]
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div className="bg-slate-100 rounded-xl p-4">
                         <p className="text-sm text-slate-600 mb-1">Total Records</p>
@@ -139,7 +246,7 @@ export default function BulkActionsPage() {
                       </div>
                     </div>
 
-                    {/* Preview Table */}
+                    [legacy Preview Table]
                     <div className="bg-white border border-slate-200/50 rounded-2xl overflow-hidden">
                       <div className="grid grid-cols-[2fr,2fr,1.5fr,1fr] gap-4 p-6 bg-gradient-to-r from-slate-50 to-white border-b border-slate-200/50 font-semibold text-sm text-slate-600">
                         <div>Name</div>
@@ -186,10 +293,10 @@ export default function BulkActionsPage() {
               </div>
             )}
 
-            {/* Bulk Messaging Tab */}
+            [legacy Bulk Messaging Tab]
             {activeTab === 'messaging' && (
               <div className="space-y-8">
-                {/* Message Templates */}
+                [legacy Message Templates]
                 <div>
                   <h3 className="text-lg font-bold text-slate-900 mb-4">Saved Templates</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -212,11 +319,11 @@ export default function BulkActionsPage() {
                   </div>
                 </div>
 
-                {/* Compose Message */}
+                [legacy Compose Message]
                 <div className="bg-white border border-slate-200/50 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-slate-900 mb-4">Compose New Message</h3>
 
-                  {/* Channel Selection */}
+                  [legacy Channel Selection]
                   <div className="mb-6">
                     <label className="block text-sm font-semibold text-slate-900 mb-3">Channel</label>
                     <div className="flex gap-3">
@@ -231,7 +338,7 @@ export default function BulkActionsPage() {
                     </div>
                   </div>
 
-                  {/* Message Text */}
+                  [legacy Message Text]
                   <div className="mb-6">
                     <label className="block text-sm font-semibold text-slate-900 mb-2">Message</label>
                     <textarea
@@ -244,7 +351,7 @@ export default function BulkActionsPage() {
                     <p className="text-xs text-slate-500 mt-2">Available variables: {'{name}'}, {'{email}'}, {'{phone}'}, {'{status}'}</p>
                   </div>
 
-                  {/* Target Selection */}
+                  [legacy Target Selection]
                   <div className="mb-6">
                     <label className="block text-sm font-semibold text-slate-900 mb-3">Send To</label>
                     <div className="space-y-2">
@@ -265,13 +372,13 @@ export default function BulkActionsPage() {
               </div>
             )}
 
-            {/* Bulk Updates Tab */}
+            [legacy Bulk Updates Tab]
             {activeTab === 'updates' && (
               <div className="space-y-8">
                 <div className="bg-white border border-slate-200/50 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-slate-900 mb-4">Update Multiple Leads</h3>
 
-                  {/* Lead Selection */}
+                  [legacy Lead Selection]
                   <div className="mb-6">
                     <label className="block text-sm font-semibold text-slate-900 mb-3">Select Leads</label>
                     <div className="space-y-2">
@@ -286,7 +393,7 @@ export default function BulkActionsPage() {
                     </div>
                   </div>
 
-                  {/* Update Fields */}
+                  [legacy Update Fields]
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                       <label className="block text-sm font-semibold text-slate-900 mb-2">Change Status To</label>
@@ -333,13 +440,13 @@ export default function BulkActionsPage() {
               </div>
             )}
 
-            {/* Export Tab */}
+            [legacy Export Tab]
             {activeTab === 'export' && (
               <div className="space-y-8">
                 <div className="bg-white border border-slate-200/50 rounded-2xl p-6">
                   <h3 className="text-lg font-bold text-slate-900 mb-4">Export Lead Data</h3>
 
-                  {/* Export Options */}
+                  [legacy Export Options]
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                       <label className="block text-sm font-semibold text-slate-900 mb-2">Filter By</label>
@@ -366,7 +473,7 @@ export default function BulkActionsPage() {
                     </div>
                   </div>
 
-                  {/* Columns Selection */}
+                  [legacy Columns Selection]
                   <div className="mb-6">
                     <label className="block text-sm font-semibold text-slate-900 mb-3">Select Columns</label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -392,3 +499,4 @@ export default function BulkActionsPage() {
     </div>
   );
 }
+*/
