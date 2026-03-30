@@ -1,0 +1,5 @@
+
+> education-crm-backend@1.0.0 start
+> node dist/src/index.js
+
+API running on http://localhost:4000
