@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getToken, getUser, hasSession } from '@/lib/auth';
+import { clearSession, getToken, getUser, hasSession } from '@/lib/auth';
 import { User } from '@/lib/types';
+import { api } from '@/lib/api';
 
 interface Tenant {
   id: number;
@@ -130,6 +131,7 @@ export default function AdminPage() {
   const [tenantUsers, setTenantUsers] = useState<TenantUser[]>([]);
   const [creating, setCreating] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const [newTenant, setNewTenant] = useState({
     name: '',
@@ -248,6 +250,18 @@ export default function AdminPage() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await api.logout();
+    } catch {
+      // Ignore API logout errors and clear local session anyway.
+    } finally {
+      clearSession();
+      router.replace('/login');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -265,8 +279,18 @@ export default function AdminPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-            <div className="text-sm text-gray-600">
-              Logged in as: {currentUser?.name} ({currentUser?.role})
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-600">
+                Logged in as: {currentUser?.name} ({currentUser?.role})
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loggingOut ? 'Logging out...' : 'Logout'}
+              </button>
             </div>
           </div>
         </div>

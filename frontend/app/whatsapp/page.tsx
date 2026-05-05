@@ -7,8 +7,8 @@ export default function WhatsAppPage() {
   return (
     <div className="flex min-h-screen bg-[#f3f8ff]">
       <Sidebar />
-      <main className="flex-1 md:ml-56">
-        <div className="mx-auto max-w-4xl px-6 py-16">
+      <main className="flex-1 md:ml-60">
+        <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-16">
           <div className="rounded-2xl border border-blue-100 bg-white p-8 shadow-sm">
             <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
               <Clock3 size={28} />

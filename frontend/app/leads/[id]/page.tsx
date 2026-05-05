@@ -254,12 +254,12 @@ export default function LeadDetailPage() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar */}
       <Sidebar />
 
       {/* Main Content */}
-      <main className="flex-1 md:ml-56 flex flex-col overflow-hidden">
+      <main className="flex-1 md:ml-60 flex flex-col overflow-hidden">
         {/* Sticky Header */}
         <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-4 px-4 py-4 md:px-6">
@@ -276,7 +276,7 @@ export default function LeadDetailPage() {
           </div>
 
           {/* Quick Actions */}
-          <div className="flex gap-2 border-t border-slate-200 px-4 py-3 md:px-6">
+          <div className="flex flex-wrap gap-2 border-t border-slate-200 px-4 py-3 md:px-6">
           <a
             href={`tel:${lead.phone}`}
             className="rounded-md bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"

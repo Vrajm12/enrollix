@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Users,
   MessageSquare,
-  AlertCircle,
   Settings,
   Menu,
   X,
@@ -68,12 +67,6 @@ export default function Sidebar() {
       label: 'My Follow-ups',
       href: '/followups',
       icon: MessageSquare,
-      section: 'main',
-    },
-    {
-      label: 'Failed Leads',
-      href: '/failed',
-      icon: AlertCircle,
       section: 'main',
     },
     {

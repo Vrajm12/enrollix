@@ -35,6 +35,10 @@ const followupSchema = z.object({
   nextFollowUp: z.string().datetime()
 }).strip();
 
+const bulkDeleteSchema = z.object({
+  leadIds: z.array(z.coerce.number().int().positive()).min(1).max(500)
+}).strip();
+
 const toNullable = (value: string | undefined) => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -106,6 +110,38 @@ router.get(
     });
 
     return res.json(leads);
+  })
+);
+
+router.delete(
+  "/bulk-delete",
+  asyncHandler(async (req, res) => {
+    if (req.user?.role !== Role.TENANT_ADMIN && req.user?.role !== Role.SUPER_ADMIN) {
+      return res.status(403).json({ message: "Only tenant admins can delete leads in bulk" });
+    }
+
+    const parsed = bulkDeleteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Invalid bulk delete payload",
+        errors: parsed.error.flatten()
+      });
+    }
+
+    const leadIds = Array.from(new Set(parsed.data.leadIds));
+
+    const result = await prisma.lead.deleteMany({
+      where: {
+        tenantId: req.user!.tenantId,
+        id: { in: leadIds }
+      }
+    });
+
+    return res.json({
+      message: "Leads deleted successfully",
+      deletedCount: result.count,
+      requestedCount: leadIds.length
+    });
   })
 );
 

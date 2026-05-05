@@ -14,7 +14,7 @@ class ApiError extends Error {
 }
 
 type RequestOptions = {
-  method?: "GET" | "POST" | "PUT" | "PATCH";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   authenticated?: boolean;
 };
@@ -75,6 +75,10 @@ export const api = {
       authenticated: false,
     }),
   me: () => request<{ user: User }>("/auth/me"),
+  logout: () =>
+    request<{ success: boolean; message: string }>("/auth/logout", {
+      method: "POST",
+    }),
 
   // Dashboard
   getFollowupsByDate: (date: string, page = 1, pageSize = 25) =>
@@ -128,6 +132,15 @@ export const api = {
     request<Lead>(`/leads/${id}/followup`, {
       method: "PATCH",
       body: { nextFollowUp },
+    }),
+  deleteLeadsBulk: (leadIds: number[]) =>
+    request<{
+      message: string;
+      deletedCount: number;
+      requestedCount: number;
+    }>("/leads/bulk-delete", {
+      method: "DELETE",
+      body: { leadIds },
     }),
 
   // Bulk actions

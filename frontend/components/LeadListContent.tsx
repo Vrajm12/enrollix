@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
-import { clearSession } from "@/lib/auth";
+import { clearSession, getUser } from "@/lib/auth";
 import { Lead, LeadStatus } from "@/lib/types";
 import { LEAD_STATUSES } from "@/lib/constants";
 import Sidebar from "@/components/Sidebar";
@@ -13,6 +13,7 @@ import { getPriorityColor } from "@/lib/utils";
 import { formatDate, isOverdue } from "@/lib/utils";
 
 export function LeadListContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
@@ -26,6 +27,14 @@ export function LeadListContent() {
   const [activeTab, setActiveTab] = useState<LeadStatus | "ALL">(
     (searchParams.get("status") as LeadStatus) || "ALL"
   );
+  const [canBulkDelete, setCanBulkDelete] = useState(false);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const user = getUser();
+    setCanBulkDelete(user?.role === "TENANT_ADMIN");
+  }, []);
 
   const loadLeads = async () => {
     setLoading(true);
@@ -36,6 +45,7 @@ export function LeadListContent() {
         course: courseFilter || undefined
       });
       setLeads(response || []);
+      setSelectedLeadIds([]);
       setError(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -77,13 +87,57 @@ export function LeadListContent() {
 
   }, [leads, activeTab, searchTerm, selectedLead]);
 
+  const toggleLeadSelection = (leadId: number) => {
+    setSelectedLeadIds((current) =>
+      current.includes(leadId) ? current.filter((id) => id !== leadId) : [...current, leadId]
+    );
+  };
+
+  const allFilteredSelected =
+    filteredLeads.length > 0 && filteredLeads.every((lead) => selectedLeadIds.includes(lead.id));
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      const filteredIds = new Set(filteredLeads.map((lead) => lead.id));
+      setSelectedLeadIds((current) => current.filter((id) => !filteredIds.has(id)));
+      return;
+    }
+
+    setSelectedLeadIds((current) => {
+      const merged = new Set(current);
+      filteredLeads.forEach((lead) => merged.add(lead.id));
+      return Array.from(merged);
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedLeadIds.length === 0 || isDeleting) return;
+
+    const shouldDelete = window.confirm(
+      `Delete ${selectedLeadIds.length} selected lead${selectedLeadIds.length > 1 ? "s" : ""}? This cannot be undone.`
+    );
+    if (!shouldDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await api.deleteLeadsBulk(selectedLeadIds);
+      await loadLeads();
+      setSelectedLead(null);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete selected leads");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <div className="flex h-screen bg-[#f3f8ff]">
+    <div className="flex min-h-screen bg-[#f3f8ff]">
       {/* Sidebar */}
       <Sidebar />
 
       {/* Main Content */}
-      <div className="flex flex-1 md:ml-56">
+      <div className="flex flex-1 md:ml-60">
         {/* Lead List */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header */}
@@ -157,6 +211,27 @@ export function LeadListContent() {
                 );
               })}
             </div>
+            {canBulkDelete && (
+              <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 md:px-6 py-3">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFiltered}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Select all in current view
+                </label>
+                <button
+                  type="button"
+                  disabled={selectedLeadIds.length === 0 || isDeleting}
+                  onClick={() => void handleDeleteSelected()}
+                  className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeleting ? "Deleting..." : `Delete Selected (${selectedLeadIds.length})`}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Lead List Content */}
@@ -183,7 +258,13 @@ export function LeadListContent() {
                 {filteredLeads.map((lead) => (
                   <div
                     key={lead.id}
-                    onClick={() => setSelectedLead(lead)}
+                    onClick={() => {
+                      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                        router.push(`/leads/${lead.id}`);
+                        return;
+                      }
+                      setSelectedLead(lead);
+                    }}
                     className={`p-4 rounded-lg border border-slate-200 cursor-pointer transition-all hover:shadow-md ${
                       selectedLead?.id === lead.id
                         ? "bg-blue-50 border-blue-400 shadow-lg"
@@ -191,6 +272,20 @@ export function LeadListContent() {
                     }`}
                   >
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                      {canBulkDelete && (
+                        <div className="md:col-span-5">
+                          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                            <input
+                              type="checkbox"
+                              checked={selectedLeadIds.includes(lead.id)}
+                              onChange={() => toggleLeadSelection(lead.id)}
+                              onClick={(event) => event.stopPropagation()}
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            Select lead
+                          </label>
+                        </div>
+                      )}
                       {/* Name & Contact */}
                       <div className="md:col-span-2">
                         <h3 className="font-bold text-slate-900">{lead.name}</h3>

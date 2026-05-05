@@ -147,7 +147,7 @@ export default function SettingsPage() {
                   <Settings2 size={14} />
                   Workspace Settings
                 </p>
-                <h1 className="text-4xl font-bold text-slate-900">Settings</h1>
+                <h1 className="text-3xl font-bold text-slate-900 md:text-4xl">Settings</h1>
                 <p className="mt-2 text-slate-600">Manage profile details, notifications, and CRM preferences in one place.</p>
               </div>
 

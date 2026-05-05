@@ -107,7 +107,7 @@ export default function FollowupsPage() {
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <h1 className="text-4xl font-bold text-slate-900">Follow-ups</h1>
+                <h1 className="text-3xl font-bold text-slate-900 md:text-4xl">Follow-ups</h1>
                 <p className="mt-2 text-slate-600">Shows follow-ups by date with pagination for large datasets.</p>
               </div>
               <div className="rounded-2xl border border-blue-100 bg-white p-3">

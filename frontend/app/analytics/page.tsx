@@ -232,7 +232,7 @@ export default function AnalyticsPage() {
       <main className="flex-1 md:ml-60 py-8 md:py-10">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold text-slate-900">Analytics & Reports</h1>
+            <h1 className="text-3xl font-bold text-slate-900 md:text-4xl">Analytics & Reports</h1>
             <p className="mt-2 text-slate-600">Blue-white reporting workspace with live backend data.</p>
           </div>
 

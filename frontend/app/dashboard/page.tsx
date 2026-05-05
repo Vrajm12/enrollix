@@ -176,7 +176,7 @@ export default function DashboardPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               {/* Header */}
               <div className="mb-12">
-                <h1 className="text-4xl font-bold text-slate-900">Dashboard</h1>
+                <h1 className="text-3xl font-bold text-slate-900 md:text-4xl">Dashboard</h1>
                 <p className="text-slate-600 mt-2">Welcome back! Here's your sales overview.</p>
               </div>
 
