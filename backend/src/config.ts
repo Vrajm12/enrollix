@@ -7,6 +7,11 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default("7d"),
   PORT: z.coerce.number().default(4000),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
+  ROOT_DOMAIN: z.string().default("guruverse.com"),
+  ALLOW_SUBDOMAIN_ORIGINS: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
   // WhatsApp Business API
   WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().optional(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),

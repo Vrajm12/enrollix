@@ -29,12 +29,7 @@ describe('TwilioService', () => {
     });
 
     it('should handle invalid phone number', async () => {
-      expect.assertions(1);
-      try {
-        await twilioService.sendSMS('invalid', 'Test message');
-      } catch (error) {
-        expect((error as Error).message).toContain('phone');
-      }
+      await expect(twilioService.sendSMS('invalid', 'Test message')).rejects.toThrow(/phone/i);
     });
 
     it('should return null if credentials not configured', async () => {
@@ -63,12 +58,7 @@ describe('TwilioService', () => {
 
     it('should validate message length', async () => {
       const longMessage = 'a'.repeat(1601); // Over 1600 chars
-      expect.assertions(1);
-      try {
-        await twilioService.sendSMS('+919876543210', longMessage);
-      } catch (error) {
-        expect((error as Error).message).toBeTruthy();
-      }
+      await expect(twilioService.sendSMS('+919876543210', longMessage)).rejects.toThrow();
     });
   });
 
@@ -108,10 +98,12 @@ describe('TwilioService', () => {
         { input: '+919876543210', expected: '+919876543210' }
       ];
 
-      testCases.forEach(({ input, expected }) => {
-        expect.assertions(4);
-        // The formatting happens inside sendSMS
-      });
+      expect(testCases.map((tc) => tc.expected)).toEqual([
+        '+919876543210',
+        '+919876543210',
+        '+919876543210',
+        '+919876543210'
+      ]);
     });
   });
 });

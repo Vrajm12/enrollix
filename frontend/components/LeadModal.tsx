@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { Lead, Priority } from "@/lib/types";
+import { COURSES } from "@/lib/constants";
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export function LeadModal({
 }: LeadModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [courseOptions, setCourseOptions] = useState<string[]>(COURSES);
   const [formData, setFormData] = useState<Partial<Lead>>({
     name: "",
     phone: "",
@@ -81,6 +83,18 @@ export function LeadModal({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void api
+      .getCourseOptions()
+      .then((response) => {
+        setCourseOptions(response.courseOptions.length > 0 ? response.courseOptions : COURSES);
+      })
+      .catch(() => {
+        setCourseOptions(COURSES);
+      });
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -149,13 +163,18 @@ export function LeadModal({
             <label className="block text-sm font-medium text-slate-700 mb-1">
               Course
             </label>
-            <input
-              type="text"
+            <select
               name="course"
               value={formData.course || ""}
               onChange={handleChange}
-              placeholder="e.g., B.Tech, MBA"
-            />
+            >
+              <option value="">Select course</option>
+              {courseOptions.map((course) => (
+                <option key={course} value={course}>
+                  {course}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Priority */}

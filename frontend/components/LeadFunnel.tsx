@@ -16,7 +16,7 @@ export function LeadFunnel({ stages }: LeadFunnelProps) {
   const maxCount = Math.max(...stages.map((s) => s.count));
 
   return (
-    <div className="bg-gradient-to-br from-slate-900/5 to-slate-900/10 border border-slate-200/30 rounded-2xl p-8 backdrop-blur-xl">
+    <div className="bg-white border border-blue-100 rounded-2xl p-8">
       <div className="mb-8">
         <h2 className="text-lg font-bold text-slate-900">Lead Conversion Funnel</h2>
         <p className="text-sm text-slate-500 mt-1">Track your leads through each stage</p>
@@ -43,7 +43,7 @@ export function LeadFunnel({ stages }: LeadFunnelProps) {
               </div>
 
               {/* Funnel bar */}
-              <div className="w-full h-12 bg-slate-200/20 rounded-lg overflow-hidden border border-slate-200/30">
+              <div className="w-full h-12 bg-blue-50 rounded-lg overflow-hidden border border-blue-100">
                 <div
                   className={`h-full ${stage.color} group-hover:shadow-lg transition-all duration-300 flex items-center px-3`}
                   style={{ width: `${width}%` }}
@@ -59,7 +59,7 @@ export function LeadFunnel({ stages }: LeadFunnelProps) {
       </div>
 
       {/* Footer stats */}
-      <div className="mt-8 pt-6 border-t border-slate-200/20 flex items-center justify-between">
+      <div className="mt-8 pt-6 border-t border-blue-100 flex items-center justify-between">
         <div>
           <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Total Leads</p>
           <p className="text-2xl font-bold text-slate-900">{stages.reduce((a, b) => a + b.count, 0)}</p>

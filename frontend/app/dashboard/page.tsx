@@ -19,7 +19,7 @@ type Counselor = {
   id: number;
   name: string;
   email: string;
-  role: "ADMIN" | "COUNSELOR";
+  role: "TENANT_ADMIN" | "ADMIN" | "COUNSELOR";
 };
 
 export default function DashboardPage() {
@@ -64,11 +64,15 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!getToken()) {
+    const token = getToken();
+    const currentUser = getUser();
+
+    if (!token && !currentUser) {
       router.replace("/login");
       return;
     }
-    setUser(getUser());
+
+    setUser(currentUser);
     void loadDashboardData();
   }, [router]);
 
@@ -154,7 +158,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex bg-gradient-to-br from-slate-50 via-white to-slate-100 min-h-screen">
+    <div className="flex bg-[#f3f8ff] min-h-screen">
       {/* Sidebar */}
       <Sidebar />
 
@@ -207,7 +211,7 @@ export default function DashboardPage() {
                   value={leads.filter((l) => l.priority === "HOT").length}
                   trend={-3}
                   icon={<Target size={24} />}
-                  color="orange"
+                  color="cyan"
                   comparison="High priority"
                 />
                 <ModernKPICard
@@ -215,7 +219,7 @@ export default function DashboardPage() {
                   value={todayFollowups.length}
                   trend={8}
                   icon={<Zap size={24} />}
-                  color="purple"
+                  color="sky"
                   comparison={`${missedFollowups.length} missed`}
                 />
               </div>
@@ -308,13 +312,13 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Priority Breakdown */}
-                <div className="bg-gradient-to-br from-slate-900/5 to-slate-900/10 border border-slate-200/30 rounded-2xl p-8 backdrop-blur-xl">
+                <div className="bg-white border border-blue-100 rounded-2xl p-8">
                   <h2 className="text-lg font-bold text-slate-900 mb-6">Priority Breakdown</h2>
                   
                   <div className="space-y-5">
                     {[
                       { name: 'HOT', count: leads.filter(l => l.priority === 'HOT').length, color: 'bg-red-100', textColor: 'text-red-700', bar: 'bg-red-500' },
-                      { name: 'WARM', count: leads.filter(l => l.priority === 'WARM').length, color: 'bg-amber-100', textColor: 'text-amber-700', bar: 'bg-amber-500' },
+                      { name: 'WARM', count: leads.filter(l => l.priority === 'WARM').length, color: 'bg-cyan-100', textColor: 'text-cyan-700', bar: 'bg-cyan-500' },
                       { name: 'COLD', count: leads.filter(l => l.priority === 'COLD').length, color: 'bg-blue-100', textColor: 'text-blue-700', bar: 'bg-blue-500' },
                     ].map((priority) => (
                       <div key={priority.name}>
@@ -324,7 +328,7 @@ export default function DashboardPage() {
                           </div>
                           <span className="text-lg font-bold text-slate-900">{priority.count}</span>
                         </div>
-                        <div className="w-full h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                        <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden">
                           <div
                             className={`h-full ${priority.bar} transition-all duration-300`}
                             style={{ width: `${(priority.count / leads.length) * 100}%` }}
@@ -335,7 +339,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Quick Stats */}
-                  <div className="mt-8 pt-6 border-t border-slate-200/20">
+                  <div className="mt-8 pt-6 border-t border-blue-100">
                     <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-3">Team Performance</p>
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">

@@ -2,6 +2,7 @@ import { ActivityType, Role } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
+import { validateResourceTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const router = Router();
@@ -26,6 +27,32 @@ const parseLeadId = (idParam: string) => {
 router.post(
   "/",
   asyncHandler(async (req, res) => {
+    // ✅ CRITICAL: Extract leadId first to check tenant access early
+    const leadId = req.body?.leadId;
+    if (!leadId || typeof leadId !== "number" || leadId <= 0) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating other payload fields
+    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!lead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Check tenant access IMMEDIATELY (before payload validation)
+    if (!validateResourceTenant(req.user!.tenantId, lead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (
+      req.user?.role === Role.COUNSELOR &&
+      lead.assignedTo &&
+      lead.assignedTo !== req.user.id
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // ✅ NOW validate entire payload (after confirming user has access to the lead)
     const parsed = createActivitySchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -34,21 +61,9 @@ router.post(
       });
     }
 
-    const lead = await prisma.lead.findUnique({ where: { id: parsed.data.leadId } });
-    if (!lead) {
-      return res.status(404).json({ message: "Lead not found" });
-    }
-
-    if (
-      req.user?.role === Role.COUNSELOR &&
-      lead.assignedTo &&
-      lead.assignedTo !== req.user.id
-    ) {
-      return res.status(403).json({ message: "Access denied for this lead" });
-    }
-
     const created = await prisma.activity.create({
       data: {
+        tenantId: req.user!.tenantId,
         leadId: parsed.data.leadId,
         type: parsed.data.type,
         notes: parsed.data.notes,
@@ -65,12 +80,18 @@ router.get(
   asyncHandler(async (req, res) => {
     const leadId = parseLeadId(req.params.lead_id);
     if (!leadId) {
-      return res.status(400).json({ message: "Invalid lead id" });
+      return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Fetch lead and check tenant IMMEDIATELY (before returning activity data)
     const lead = await prisma.lead.findUnique({ where: { id: leadId } });
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Check tenant access FIRST
+    if (!validateResourceTenant(req.user!.tenantId, lead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     if (
@@ -78,7 +99,7 @@ router.get(
       lead.assignedTo &&
       lead.assignedTo !== req.user.id
     ) {
-      return res.status(403).json({ message: "Access denied for this lead" });
+      return res.status(403).json({ message: "Access denied" });
     }
 
     const activities = await prisma.activity.findMany({

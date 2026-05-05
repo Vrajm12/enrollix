@@ -4,6 +4,7 @@ declare global {
   namespace Express {
     interface UserPayload {
       id: number;
+      tenantId: number;
       name: string;
       email: string;
       role: Role;
@@ -11,6 +12,8 @@ declare global {
 
     interface Request {
       user?: UserPayload;
+      cookies?: Record<string, string>;
+      nonce?: string;
     }
   }
 }

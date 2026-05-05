@@ -8,6 +8,8 @@ datasource db {
 }
 
 enum Role {
+  SUPER_ADMIN
+  TENANT_ADMIN
   ADMIN
   COUNSELOR
 }
@@ -47,28 +49,56 @@ enum Priority {
   HOT
 }
 
-model User {
+model Tenant {
   id            Int      @id @default(autoincrement())
   name          String
-  email         String   @unique
-  password      String
-  role          Role     @default(COUNSELOR)
-  leadsAssigned Lead[]   @relation("LeadAssignedTo")
+  slug          String   @unique
+  description   String?
+  courseOptions Json     @default(dbgenerated("'[]'::jsonb")) @map("course_options") @db.JsonB
+  maxUsers      Int      @default(10) @map("max_users")
+  isActive      Boolean  @default(true) @map("is_active")
+  users         User[]
+  leads         Lead[]
+  activities    Activity[]
   whatsappMessages WhatsAppMessage[]
   smsMessages   SMSMessage[]
   reports       Report[]
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  @@map("tenants")
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  tenantId        Int      @map("tenant_id")
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  email           String   @map("email")
+  password        String
+  role            Role     @default(COUNSELOR)
+  leadsAssigned   Lead[]   @relation("LeadAssignedTo")
+  whatsappMessages WhatsAppMessage[]
+  smsMessages     SMSMessage[]
+  reports         Report[]
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
   @@map("users")
 }
 
 model Lead {
   id               Int         @id @default(autoincrement())
+  tenantId         Int         @map("tenant_id")
+  tenant           Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name             String
   phone            String
   email            String?
   address          String?
+  region           String?
+  city             String?
   parentContact    String?     @map("parent_contact")
   course           String?
   source           String?
@@ -83,11 +113,15 @@ model Lead {
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
+  @@index([tenantId])
+  @@index([assignedTo])
   @@map("leads")
 }
 
 model Activity {
   id           Int          @id @default(autoincrement())
+  tenantId     Int          @map("tenant_id")
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   leadId       Int          @map("lead_id")
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
   type         ActivityType
@@ -95,11 +129,15 @@ model Activity {
   createdAt    DateTime     @default(now()) @map("created_at")
   nextFollowUp DateTime     @map("next_follow_up")
 
+  @@index([tenantId])
+  @@index([leadId])
   @@map("activities")
 }
 
 model WhatsAppMessage {
   id              Int             @id @default(autoincrement())
+  tenantId        Int             @map("tenant_id")
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   leadId          Int             @map("lead_id")
   lead            Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
   sentBy          Int             @map("sent_by")
@@ -113,6 +151,7 @@ model WhatsAppMessage {
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
+  @@index([tenantId])
   @@index([leadId])
   @@index([sentBy])
   @@map("whatsapp_messages")
@@ -120,6 +159,8 @@ model WhatsAppMessage {
 
 model SMSMessage {
   id              Int             @id @default(autoincrement())
+  tenantId        Int             @map("tenant_id")
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   leadId          Int             @map("lead_id")
   lead            Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
   sentBy          Int             @map("sent_by")
@@ -135,6 +176,7 @@ model SMSMessage {
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
+  @@index([tenantId])
   @@index([leadId])
   @@index([sentBy])
   @@map("sms_messages")
@@ -142,6 +184,8 @@ model SMSMessage {
 
 model Report {
   id              Int             @id @default(autoincrement())
+  tenantId        Int             @map("tenant_id")
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name            String
   reportType      String          @map("report_type")
   generatedBy     Int             @map("generated_by")
@@ -150,6 +194,27 @@ model Report {
   filters         Json?
   createdAt       DateTime        @default(now()) @map("created_at")
 
+  @@index([tenantId])
   @@index([generatedBy])
   @@map("reports")
+}
+
+model SecurityEvent {
+  id              String          @id @default(cuid())
+  tenantId        Int             @map("tenant_id")
+  userId          Int?            @map("user_id")
+  action          String          // LOGIN, LOGOUT, DATA_ACCESS, PERMISSION_DENIED, DATA_MODIFICATION, etc.
+  resource        String          // leads, activities, bulk, messaging, etc.
+  resourceId      Int?            @map("resource_id")
+  status          String          // success, blocked, error
+  details         Json?           // Additional context
+  ipAddress       String?         @map("ip_address")
+  userAgent       String?         @map("user_agent")
+  timestamp       DateTime        @default(now())
+  
+  @@index([tenantId])
+  @@index([userId])
+  @@index([timestamp])
+  @@index([status])
+  @@map("security_events")
 }

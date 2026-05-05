@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "COUNSELOR";
+export type UserRole = "SUPER_ADMIN" | "TENANT_ADMIN" | "ADMIN" | "COUNSELOR";
 
 export type LeadStatus =
   | "LEAD"
@@ -14,9 +14,11 @@ export type Priority = "COLD" | "WARM" | "HOT";
 
 export interface User {
   id: number;
+  tenantId: number;
   name: string;
   email: string;
   role: UserRole;
+  tenantName?: string;
 }
 
 export interface Lead {
@@ -25,6 +27,8 @@ export interface Lead {
   phone: string;
   email: string | null;
   address: string | null;
+  region: string | null;
+  city: string | null;
   parentContact: string | null;
   course: string | null;
   source: string | null;

@@ -1,7 +1,8 @@
-import { LeadStatus, Priority, Role } from "@prisma/client";
+import { LeadStatus, Priority, Prisma, Role } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
+import { validateResourceTenant, validateUserTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const router = Router();
@@ -11,6 +12,8 @@ const leadBaseSchema = z.object({
   phone: z.string().trim().min(1, "Phone is required"),
   email: z.string().trim().email().optional().or(z.literal("")),
   address: z.string().trim().optional().or(z.literal("")),
+  region: z.string().trim().optional().or(z.literal("")),
+  city: z.string().trim().optional().or(z.literal("")),
   parentContact: z.string().trim().optional().or(z.literal("")),
   course: z.string().trim().optional().or(z.literal("")),
   source: z.string().trim().optional().or(z.literal("")),
@@ -45,10 +48,49 @@ const parseLeadId = (idParam: string) => {
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const where =
-      req.user?.role === Role.COUNSELOR
-        ? { OR: [{ assignedTo: req.user.id }, { assignedTo: null }] }
-        : {};
+    const region = typeof req.query.region === "string" ? req.query.region.trim() : "";
+    const city = typeof req.query.city === "string" ? req.query.city.trim() : "";
+    const course = typeof req.query.course === "string" ? req.query.course.trim() : "";
+    const tenantFilter = { tenantId: req.user!.tenantId };
+
+    const baseWhere =
+      req.user?.role === Role.TENANT_ADMIN || req.user?.role === Role.SUPER_ADMIN
+        ? tenantFilter
+        : {
+            ...tenantFilter,
+            assignedTo: req.user!.id
+          };
+
+    const where: Prisma.LeadWhereInput = { ...baseWhere };
+    const andFilters: Prisma.LeadWhereInput[] = [];
+
+    if (region) {
+      andFilters.push({
+        OR: [
+          { region: { contains: region, mode: "insensitive" } },
+          { address: { contains: region, mode: "insensitive" } }
+        ]
+      });
+    }
+
+    if (city) {
+      andFilters.push({
+        OR: [
+          { city: { contains: city, mode: "insensitive" } },
+          { address: { contains: city, mode: "insensitive" } }
+        ]
+      });
+    }
+
+    if (course) {
+      andFilters.push({
+        course: { contains: course, mode: "insensitive" }
+      });
+    }
+
+    if (andFilters.length > 0) {
+      where.AND = andFilters;
+    }
 
     const leads = await prisma.lead.findMany({
       where,
@@ -72,9 +114,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const leadId = parseLeadId(req.params.id);
     if (!leadId) {
-      return res.status(400).json({ message: "Invalid lead id" });
+      return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Fetch lead first
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
       include: {
@@ -84,16 +127,21 @@ router.get(
       }
     });
 
+    // ✅ CRITICAL: Check tenant access IMMEDIATELY (before any other logic)
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }
 
+    if (!validateResourceTenant(req.user!.tenantId, lead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     if (
-      req.user?.role === Role.COUNSELOR &&
-      lead.assignedTo &&
-      lead.assignedTo !== req.user.id
+      req.user?.role !== Role.TENANT_ADMIN &&
+      req.user?.role !== Role.SUPER_ADMIN &&
+      lead.assignedTo !== req.user?.id
     ) {
-      return res.status(403).json({ message: "Access denied for this lead" });
+      return res.status(403).json({ message: "Access denied" });
     }
 
     return res.json(lead);
@@ -115,12 +163,26 @@ router.post(
     const assignedTo =
       req.user?.role === Role.COUNSELOR ? req.user.id : payload.assignedTo ?? null;
 
+    // Validate assigned user belongs to same tenant (if specified)
+    if (assignedTo && assignedTo !== req.user?.id) {
+      const assignedUser = await prisma.user.findUnique({
+        where: { id: assignedTo }
+      });
+
+      if (!assignedUser || !validateUserTenant(req.user!.tenantId, assignedUser.tenantId, req.user?.role)) {
+        return res.status(400).json({ message: "Invalid assigned user" });
+      }
+    }
+
     const created = await prisma.lead.create({
       data: {
+        tenantId: req.user!.tenantId,
         name: payload.name,
         phone: payload.phone,
         email: toNullable(payload.email),
         address: toNullable(payload.address),
+        region: toNullable(payload.region),
+        city: toNullable(payload.city),
         parentContact: toNullable(payload.parentContact),
         course: toNullable(payload.course),
         source: toNullable(payload.source),
@@ -145,9 +207,29 @@ router.put(
   asyncHandler(async (req, res) => {
     const leadId = parseLeadId(req.params.id);
     if (!leadId) {
-      return res.status(400).json({ message: "Invalid lead id" });
+      return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
+    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!existingLead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Check tenant access IMMEDIATELY (before payload validation)
+    if (!validateResourceTenant(req.user!.tenantId, existingLead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (
+      req.user?.role !== Role.TENANT_ADMIN &&
+      req.user?.role !== Role.SUPER_ADMIN &&
+      existingLead.assignedTo !== req.user?.id
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // ✅ NOW validate payload (after confirming user has access)
     const parsed = leadBaseSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -156,22 +238,20 @@ router.put(
       });
     }
 
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
-    if (!existingLead) {
-      return res.status(404).json({ message: "Lead not found" });
-    }
-
-    if (
-      req.user?.role === Role.COUNSELOR &&
-      existingLead.assignedTo &&
-      existingLead.assignedTo !== req.user.id
-    ) {
-      return res.status(403).json({ message: "Access denied for this lead" });
-    }
-
     const payload = parsed.data;
     const assignedTo =
       req.user?.role === Role.COUNSELOR ? req.user.id : payload.assignedTo ?? null;
+
+    // Validate assigned user belongs to same tenant (if specified)
+    if (assignedTo && assignedTo !== req.user?.id) {
+      const assignedUser = await prisma.user.findUnique({
+        where: { id: assignedTo }
+      });
+
+      if (!assignedUser || !validateUserTenant(req.user!.tenantId, assignedUser.tenantId, req.user?.role)) {
+        return res.status(403).json({ message: "Invalid assigned user" });
+      }
+    }
 
     const updated = await prisma.lead.update({
       where: { id: leadId },
@@ -180,6 +260,8 @@ router.put(
         phone: payload.phone,
         email: toNullable(payload.email),
         address: toNullable(payload.address),
+        region: toNullable(payload.region),
+        city: toNullable(payload.city),
         parentContact: toNullable(payload.parentContact),
         course: toNullable(payload.course),
         source: toNullable(payload.source),
@@ -204,28 +286,35 @@ router.patch(
   asyncHandler(async (req, res) => {
     const leadId = parseLeadId(req.params.id);
     if (!leadId) {
-      return res.status(400).json({ message: "Invalid lead id" });
+      return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
+    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!existingLead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Check tenant access IMMEDIATELY (before payload validation)
+    if (!validateResourceTenant(req.user!.tenantId, existingLead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (
+      req.user?.role !== Role.TENANT_ADMIN &&
+      req.user?.role !== Role.SUPER_ADMIN &&
+      existingLead.assignedTo !== req.user?.id
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // ✅ NOW validate payload (after confirming user has access)
     const parsed = statusSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
         message: "Invalid status payload",
         errors: parsed.error.flatten()
       });
-    }
-
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
-    if (!existingLead) {
-      return res.status(404).json({ message: "Lead not found" });
-    }
-
-    if (
-      req.user?.role === Role.COUNSELOR &&
-      existingLead.assignedTo &&
-      existingLead.assignedTo !== req.user.id
-    ) {
-      return res.status(403).json({ message: "Access denied for this lead" });
     }
 
     const updated = await prisma.lead.update({
@@ -242,28 +331,35 @@ router.patch(
   asyncHandler(async (req, res) => {
     const leadId = parseLeadId(req.params.id);
     if (!leadId) {
-      return res.status(400).json({ message: "Invalid lead id" });
+      return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
+    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!existingLead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Check tenant access IMMEDIATELY (before payload validation)
+    if (!validateResourceTenant(req.user!.tenantId, existingLead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (
+      req.user?.role !== Role.TENANT_ADMIN &&
+      req.user?.role !== Role.SUPER_ADMIN &&
+      existingLead.assignedTo !== req.user?.id
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // ✅ NOW validate payload (after confirming user has access)
     const parsed = prioritySchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
         message: "Invalid priority payload",
         errors: parsed.error.flatten()
       });
-    }
-
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
-    if (!existingLead) {
-      return res.status(404).json({ message: "Lead not found" });
-    }
-
-    if (
-      req.user?.role === Role.COUNSELOR &&
-      existingLead.assignedTo &&
-      existingLead.assignedTo !== req.user.id
-    ) {
-      return res.status(403).json({ message: "Access denied for this lead" });
     }
 
     const updated = await prisma.lead.update({
@@ -280,28 +376,35 @@ router.patch(
   asyncHandler(async (req, res) => {
     const leadId = parseLeadId(req.params.id);
     if (!leadId) {
-      return res.status(400).json({ message: "Invalid lead id" });
+      return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
+    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!existingLead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Check tenant access IMMEDIATELY (before payload validation)
+    if (!validateResourceTenant(req.user!.tenantId, existingLead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (
+      req.user?.role !== Role.TENANT_ADMIN &&
+      req.user?.role !== Role.SUPER_ADMIN &&
+      existingLead.assignedTo !== req.user?.id
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // ✅ NOW validate payload (after confirming user has access)
     const parsed = followupSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
         message: "Invalid followup payload",
         errors: parsed.error.flatten()
       });
-    }
-
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
-    if (!existingLead) {
-      return res.status(404).json({ message: "Lead not found" });
-    }
-
-    if (
-      req.user?.role === Role.COUNSELOR &&
-      existingLead.assignedTo &&
-      existingLead.assignedTo !== req.user.id
-    ) {
-      return res.status(403).json({ message: "Access denied for this lead" });
     }
 
     const updated = await prisma.lead.update({

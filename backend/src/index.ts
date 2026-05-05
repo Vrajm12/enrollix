@@ -1,9 +1,13 @@
 import cors from "cors";
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { env } from "./config.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
+import { tenantContext } from "./middleware/tenant.js";
+import { securityHeaders, rateLimitHeaders } from "./middleware/security.js";
 import activitiesRouter from "./routes/activities.js";
+import adminRouter from "./routes/admin.js";
 import authRouter from "./routes/auth.js";
 import bulkRouter from "./routes/bulk.js";
 import dashboardRouter from "./routes/dashboard.js";
@@ -14,18 +18,103 @@ import usersRouter from "./routes/users.js";
 
 const app = express();
 
+const allowedOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim());
+const allowSubdomainOrigins = env.ALLOW_SUBDOMAIN_ORIGINS;
+const isAllowedSubdomainOrigin = (origin: string) => {
+  try {
+    const { hostname } = new URL(origin);
+    return hostname === env.ROOT_DOMAIN || hostname.endsWith(`.${env.ROOT_DOMAIN}`);
+  } catch {
+    return false;
+  }
+};
+
+// Rate limiting middleware - Auth endpoint (strict)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per 15 minutes
+  message: "Too many login attempts, please try again later",
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+    // Don't rate limit health checks and info endpoints
+    return req.path === "/health" || req.path === "/api/info";
+  }
+});
+
+// Rate limiting middleware - General API (moderate)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // 100 requests per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Don't rate limit super admins (if user has role)
+    return (req as any).user?.role === "SUPER_ADMIN";
+  }
+});
+
+// Rate limiting middleware - Bulk operations (very strict)
+const bulkLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // 10 bulk operations per hour
+  message: "Bulk operation limit exceeded, please try again later",
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Security: Trust proxy in production
+app.set('trust proxy', 1);
+
+// Security headers
+app.use(securityHeaders);
+
+// CORS with strict options
 app.use(
   cors({
-    origin: env.CORS_ORIGIN.split(",").map((origin) => origin.trim()),
-    credentials: true
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (allowSubdomainOrigins && isAllowedSubdomainOrigin(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS origin not allowed"));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Slug'],
+    maxAge: 3600
   })
 );
-app.use(express.json());
+
+app.use(express.json({ limit: '10kb' })); // Limit payload size
+app.use(express.urlencoded({ limit: '10kb', extended: true }));
+
+// Simple cookie parser middleware
+app.use((req, res, next) => {
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    const cookies: Record<string, string> = {};
+    cookieHeader.split(';').forEach(cookie => {
+      const [name, value] = cookie.trim().split('=');
+      if (name && value) {
+        cookies[name] = decodeURIComponent(value);
+      }
+    });
+    req.cookies = cookies;
+  } else {
+    req.cookies = {};
+  }
+  next();
+});
+
+// Rate limiting response headers
+app.use(rateLimitHeaders);
 
 app.get("/health", (_req, res) => {
   res.json({ 
     status: "ok",
-    service: "Enrollix API",
+    service: "Guruverse API",
     version: "1.0.0",
     timestamp: new Date().toISOString()
   });
@@ -33,7 +122,7 @@ app.get("/health", (_req, res) => {
 
 app.get("/api/info", (_req, res) => {
   res.json({
-    name: "Enrollix",
+    name: "Guruverse",
     description: "Modern Admission Management Platform",
     version: "1.0.0",
     environment: process.env.NODE_ENV || "development",
@@ -41,24 +130,33 @@ app.get("/api/info", (_req, res) => {
   });
 });
 
-app.use("/auth", authRouter);
-app.use("/dashboard", requireAuth, dashboardRouter);
-app.use("/leads", requireAuth, leadsRouter);
-app.use("/activities", requireAuth, activitiesRouter);
-app.use("/bulk", requireAuth, bulkRouter);
+app.use("/auth", authLimiter, authRouter);
+app.use("/admin", apiLimiter, adminRouter);
+
+// Apply tenant context middleware to all protected routes
+app.use("/dashboard", apiLimiter, requireAuth, tenantContext, dashboardRouter);
+app.use("/leads", apiLimiter, requireAuth, tenantContext, leadsRouter);
+app.use("/activities", apiLimiter, requireAuth, tenantContext, activitiesRouter);
+app.use("/bulk", bulkLimiter, requireAuth, tenantContext, bulkRouter);
 
 // Middleware for messaging routes - skip auth for webhook
 app.use("/messaging", (req, res, next) => {
   if (req.path === "/webhooks/sms-status" && req.method === "POST") {
     next();
   } else {
-    requireAuth(req, res, next);
+    apiLimiter(req, res, (err) => {
+      if (err) return;
+      requireAuth(req, res, (err) => {
+        if (err) return res.status(401).json({ message: "Unauthorized" });
+        tenantContext(req, res, next);
+      });
+    });
   }
 });
 app.use("/messaging", messagingRouter);
 
-app.use("/reports", requireAuth, reportingRouter);
-app.use("/users", requireAuth, usersRouter);
+app.use("/reports", apiLimiter, requireAuth, tenantContext, reportingRouter);
+app.use("/users", apiLimiter, requireAuth, tenantContext, usersRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

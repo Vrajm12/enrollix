@@ -41,6 +41,7 @@ type CanonicalHeader =
   | "name"
   | "phone"
   | "email"
+  | "location"
   | "address"
   | "parent_contact"
   | "course"
@@ -101,6 +102,7 @@ const headerAliases: Record<string, CanonicalHeader> = {
   phone_number: "phone",
   contact_number: "phone",
   email: "email",
+  location: "location",
   email_id: "email",
   mail: "email",
   address: "address",
@@ -256,7 +258,7 @@ const parseNextFollowUp = (value: string | null) => {
     : { value: date.toISOString(), reason: null };
 };
 
-const analyzeCsvImport = async (csv: string): Promise<ImportAnalysis> => {
+const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAnalysis> => {
   const rows = parseCsv(csv);
   if (rows.length === 0) {
     throw new Error("CSV file is empty");
@@ -317,7 +319,7 @@ const analyzeCsvImport = async (csv: string): Promise<ImportAnalysis> => {
             name,
             phone,
             email,
-            address: nonEmpty(getCell("address")),
+            address: nonEmpty(getCell("address")) ?? nonEmpty(getCell("location")),
             parentContact: nonEmpty(getCell("parent_contact")),
             course: nonEmpty(getCell("course")),
             source: nonEmpty(getCell("source")),
@@ -361,7 +363,10 @@ const analyzeCsvImport = async (csv: string): Promise<ImportAnalysis> => {
   const existingLeads =
     duplicateChecks.length > 0
       ? await prisma.lead.findMany({
-          where: { OR: duplicateChecks },
+          where: {
+            tenantId,
+            OR: duplicateChecks
+          },
           select: { id: true, name: true, phone: true, email: true }
         })
       : [];
@@ -416,12 +421,16 @@ const buildAccessibleLeadWhere = (
   leadIds: number[] | null,
   reqUser: Express.UserPayload
 ) => {
+  // ✅ CRITICAL: Always include tenantId filter to prevent cross-tenant access
   const baseWhere =
     reqUser.role === Role.COUNSELOR
       ? {
+          tenantId: reqUser.tenantId,
           OR: [{ assignedTo: reqUser.id }, { assignedTo: null }]
         }
-      : {};
+      : {
+          tenantId: reqUser.tenantId
+        };
 
   return leadIds
     ? {
@@ -443,7 +452,7 @@ router.post(
     }
 
     try {
-      const analysis = await analyzeCsvImport(parsed.data.csv);
+      const analysis = await analyzeCsvImport(parsed.data.csv, req.user!.tenantId);
       return res.json(analysis);
     } catch (error) {
       return res.status(400).json({
@@ -465,7 +474,7 @@ router.post(
     }
 
     try {
-      const analysis = await analyzeCsvImport(parsed.data.csv);
+      const analysis = await analyzeCsvImport(parsed.data.csv, req.user!.tenantId);
       const readyRows = analysis.rows.filter(
         (row): row is PreviewRow & { normalized: ParsedImportRow } =>
           row.status === "ready" && row.normalized !== null
@@ -485,6 +494,7 @@ router.post(
         try {
           const lead = await prisma.lead.create({
             data: {
+              tenantId: req.user!.tenantId,
               name: row.normalized.name,
               phone: row.normalized.phone,
               email: row.normalized.email,
@@ -536,6 +546,24 @@ router.post(
 router.patch(
   "/leads",
   asyncHandler(async (req, res) => {
+    // ✅ CRITICAL: Extract leadIds first to do tenant check early
+    const leadIds = req.body?.leadIds;
+    if (!Array.isArray(leadIds) || leadIds.length === 0) {
+      return res.status(404).json({ message: "No matching leads found" });
+    }
+
+    // ✅ CRITICAL: Check if ANY of these leads belong to this tenant (early access check)
+    const accessibleWhere = buildAccessibleLeadWhere(leadIds, req.user!);
+    const matchedLeadIds = await prisma.lead.findMany({
+      where: accessibleWhere,
+      select: { id: true }
+    });
+
+    if (matchedLeadIds.length === 0) {
+      return res.status(404).json({ message: "No matching leads found" });
+    }
+
+    // ✅ NOW validate the entire payload (after confirming user has access to leads)
     const parsed = bulkUpdateSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -544,7 +572,7 @@ router.patch(
       });
     }
 
-    const { leadIds, updates } = parsed.data;
+    const { updates } = parsed.data;
 
     if (
       req.user?.role === Role.COUNSELOR &&
@@ -562,19 +590,9 @@ router.patch(
         select: { id: true, role: true }
       });
 
-      if (!assignee || ![Role.ADMIN, Role.COUNSELOR].includes(assignee.role)) {
-        return res.status(400).json({ message: "Assigned user is invalid" });
+      if (!assignee || (assignee.role !== Role.ADMIN && assignee.role !== Role.TENANT_ADMIN && assignee.role !== Role.COUNSELOR)) {
+        return res.status(403).json({ message: "Assigned user is invalid" });
       }
-    }
-
-    const accessibleWhere = buildAccessibleLeadWhere(leadIds, req.user!);
-    const matchedLeadIds = await prisma.lead.findMany({
-      where: accessibleWhere,
-      select: { id: true }
-    });
-
-    if (matchedLeadIds.length === 0) {
-      return res.status(404).json({ message: "No matching leads found" });
     }
 
     const updateData = {
@@ -605,6 +623,9 @@ router.patch(
 router.post(
   "/export",
   asyncHandler(async (req, res) => {
+    if (req.user?.role !== Role.TENANT_ADMIN) {
+      return res.status(403).json({ message: "Only tenant admins can export leads" });
+    }
     const parsed = exportSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -701,7 +722,7 @@ router.post(
     });
 
     return res.json({
-      filename: `enrollix-leads-${new Date().toISOString().slice(0, 10)}.csv`,
+      filename: `guruverse-leads-${new Date().toISOString().slice(0, 10)}.csv`,
       totalRows: leads.length,
       csv: buildCsv(csvRows)
     });

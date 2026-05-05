@@ -1,8 +1,8 @@
-import { Router } from "express";
+import { Request, Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { LeadStatus } from "@prisma/client";
+import { LeadStatus, Prisma, Role } from "@prisma/client";
 
 const router = Router();
 
@@ -11,6 +11,19 @@ const dateRangeSchema = z.object({
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional()
 });
+
+const buildLeadAccessWhere = (req: Request): Prisma.LeadWhereInput => {
+  const tenantFilter = { tenantId: req.user!.tenantId };
+
+  if (req.user?.role === Role.COUNSELOR) {
+    return {
+      ...tenantFilter,
+      OR: [{ assignedTo: req.user.id }, { assignedTo: null }]
+    };
+  }
+
+  return tenantFilter;
+};
 
 // Conversion Funnel Report
 router.get(
@@ -25,7 +38,8 @@ router.get(
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where = {
+    const where: Prisma.LeadWhereInput = {
+      ...buildLeadAccessWhere(req),
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
@@ -70,7 +84,8 @@ router.get(
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where = {
+    const where: Prisma.LeadWhereInput = {
+      ...buildLeadAccessWhere(req),
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
@@ -134,49 +149,82 @@ router.get(
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where = {
+    const leadWhereBase: Prisma.LeadWhereInput = {
+      tenantId: req.user!.tenantId,
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
 
+    const messageWhereBase = {
+      tenantId: req.user!.tenantId,
+      createdAt: {
+        ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
+        ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
+      }
+    };
+
+    const whatsappWhere: Prisma.WhatsAppMessageWhereInput =
+      req.user?.role === Role.COUNSELOR
+        ? { ...messageWhereBase, sentBy: req.user.id }
+        : messageWhereBase;
+
+    const smsWhere: Prisma.SMSMessageWhereInput =
+      req.user?.role === Role.COUNSELOR
+        ? { ...messageWhereBase, sentBy: req.user.id }
+        : messageWhereBase;
+
+    const userWhere =
+      req.user?.role === Role.COUNSELOR
+        ? { id: req.user.id, tenantId: req.user!.tenantId }
+        : { tenantId: req.user!.tenantId };
+
     const counselors = await prisma.user.findMany({
-      include: {
-        leadsAssigned: {
-          where
-        },
-        whatsappMessages: {
-          where
-        },
-        smsMessages: {
-          where
-        }
+      where: userWhere,
+      select: {
+        id: true,
+        name: true,
+        email: true
       }
     });
 
-    const teamPerformance = counselors.map((counselor) => {
-      const leads = counselor.leadsAssigned;
-      const enrolled = leads.filter((l) => l.status === LeadStatus.ENROLLED).length;
-      const qualified = leads.filter((l) => l.status === LeadStatus.QUALIFIED).length;
-      const hotLeads = leads.filter((l) => l.priority === "HOT").length;
+    const teamPerformance = await Promise.all(
+      counselors.map(async (counselor) => {
+        const leads = await prisma.lead.findMany({
+          where: { ...leadWhereBase, assignedTo: counselor.id },
+          select: { status: true, priority: true }
+        });
 
-      return {
-        id: counselor.id,
-        name: counselor.name,
-        email: counselor.email,
-        leadsManaged: leads.length,
-        enrolled,
-        qualified,
-        hotLeads,
-        conversionRate: leads.length > 0 ? (enrolled / leads.length) * 100 : 0,
-        engagementScore: counselor.whatsappMessages.length + counselor.smsMessages.length,
-        messages: {
-          whatsapp: counselor.whatsappMessages.length,
-          sms: counselor.smsMessages.length
-        }
-      };
-    });
+        const whatsappCount = await prisma.whatsAppMessage.count({
+          where: { ...whatsappWhere, sentBy: counselor.id }
+        });
+
+        const smsCount = await prisma.sMSMessage.count({
+          where: { ...smsWhere, sentBy: counselor.id }
+        });
+
+        const enrolled = leads.filter((l) => l.status === LeadStatus.ENROLLED).length;
+        const qualified = leads.filter((l) => l.status === LeadStatus.QUALIFIED).length;
+        const hotLeads = leads.filter((l) => l.priority === "HOT").length;
+
+        return {
+          id: counselor.id,
+          name: counselor.name,
+          email: counselor.email,
+          leadsManaged: leads.length,
+          enrolled,
+          qualified,
+          hotLeads,
+          conversionRate: leads.length > 0 ? (enrolled / leads.length) * 100 : 0,
+          engagementScore: whatsappCount + smsCount,
+          messages: {
+            whatsapp: whatsappCount,
+            sms: smsCount
+          }
+        };
+      })
+    );
 
     const sorted = teamPerformance.sort((a, b) => b.enrolled - a.enrolled);
 
@@ -201,7 +249,8 @@ router.get(
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where = {
+    const where: Prisma.LeadWhereInput = {
+      ...buildLeadAccessWhere(req),
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
@@ -271,7 +320,8 @@ router.get(
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where = {
+    const where: Prisma.LeadWhereInput = {
+      ...buildLeadAccessWhere(req),
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
@@ -313,6 +363,7 @@ router.post(
 
     const report = await prisma.report.create({
       data: {
+        tenantId: req.user!.tenantId,
         name: `${reportType} - ${new Date().toLocaleDateString()}`,
         reportType,
         generatedBy: req.user!.id,
@@ -330,6 +381,9 @@ router.get(
   "/saved",
   asyncHandler(async (req, res) => {
     const reports = await prisma.report.findMany({
+      where: {
+        tenantId: req.user!.tenantId
+      },
       include: {
         user: { select: { id: true, name: true, email: true } }
       },
@@ -354,6 +408,10 @@ router.get(
 
     if (!report) {
       return res.status(404).json({ message: "Report not found" });
+    }
+
+    if (report.tenantId !== req.user!.tenantId) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     return res.json(report);

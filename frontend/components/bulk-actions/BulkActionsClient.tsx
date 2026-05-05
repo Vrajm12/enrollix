@@ -5,7 +5,7 @@ import { Edit2, FileDown, Send, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Sidebar from '@/components/Sidebar';
 import LeadSelectionList from '@/components/bulk-actions/LeadSelectionList';
-import { clearSession, getToken } from '@/lib/auth';
+import { clearSession, getToken, hasSession } from '@/lib/auth';
 import { LEAD_STATUSES } from '@/lib/constants';
 import { ApiError, api } from '@/lib/api';
 import { formatDate, getPriorityColor } from '@/lib/utils';
@@ -21,7 +21,7 @@ type Counselor = {
   id: number;
   name: string;
   email: string;
-  role: 'ADMIN' | 'COUNSELOR';
+  role: 'TENANT_ADMIN' | 'ADMIN' | 'COUNSELOR';
 };
 
 type ImportPreviewRow = {
@@ -52,6 +52,8 @@ type ImportPreview = {
     duplicateRows: number;
     errorRows: number;
   };
+  rowsTruncated?: boolean;
+  maxPreviewRows?: number;
 };
 
 type MessageTemplate = {
@@ -79,13 +81,13 @@ const MESSAGE_TEMPLATES: MessageTemplate[] = [
     id: 1,
     name: 'First response',
     channel: 'whatsapp',
-    body: 'Hello from Enrollix. Thank you for your enquiry. Our admissions team will contact you shortly.',
+    body: 'Hello from Guruverse. Thank you for your enquiry. Our admissions team will contact you shortly.',
   },
   {
     id: 2,
     name: 'Follow-up reminder',
     channel: 'sms',
-    body: 'Reminder from Enrollix: please reply with a suitable time for your counselling call.',
+    body: 'Reminder from Guruverse: please reply with a suitable time for your counselling call.',
   },
   {
     id: 3,
@@ -135,6 +137,17 @@ const matchAssignedLead = (lead: Lead, filter: AssignedFilter) => {
   return lead.assignedTo === Number(filter);
 };
 
+const excelBufferToCsv = async (file: File) => {
+  const data = await file.arrayBuffer();
+  const xlsx = await import("xlsx/xlsx.mjs");
+  const workbook = xlsx.read(data, { type: "array" });
+  const firstSheet = workbook.SheetNames[0];
+  if (!firstSheet) {
+    throw new Error("Excel file is empty");
+  }
+  return xlsx.utils.sheet_to_csv(workbook.Sheets[firstSheet], { blankrows: false });
+};
+
 export default function BulkActionsClient() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -146,6 +159,7 @@ export default function BulkActionsClient() {
   const [counselors, setCounselors] = useState<Counselor[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
   const [csvText, setCsvText] = useState('');
+  const [fileReady, setFileReady] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
@@ -185,7 +199,7 @@ export default function BulkActionsClient() {
   };
 
   const loadPageData = async () => {
-    if (!getToken()) {
+    if (!hasSession()) {
       handleAuthFailure();
       return;
     }
@@ -250,29 +264,52 @@ export default function BulkActionsClient() {
     );
   };
 
-  const handleCsvUpload = async (event: ChangeEvent<HTMLInputElement>) => {
+  const handleChooseFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     resetFeedback();
-    setPreviewLoading(true);
-    setImportLoading(false);
-
     try {
-      const text = await file.text();
-      const importPreview = await api.previewCsvImport(text);
+      const text =
+        file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")
+          ? await excelBufferToCsv(file)
+          : await file.text();
       setCsvFileName(file.name);
       setCsvText(text);
-      setPreview(importPreview);
-      setPageSuccess(`Preview ready: ${importPreview.summary.readyRows} leads can be imported.`);
+      setFileReady(true);
+      setPreview(null);
+      setPageSuccess(`File selected: ${file.name}. Click "Upload File" to preview rows.`);
     } catch (error) {
       setPreview(null);
       setCsvText('');
       setCsvFileName(file.name);
+      setFileReady(false);
       handleApiError(error, 'Unable to preview CSV file');
+    }
+    event.target.value = '';
+  };
+
+  const handleUploadFile = async () => {
+    if (!csvText) {
+      setPageError('Choose file first.');
+      return;
+    }
+
+    resetFeedback();
+    setPreviewLoading(true);
+    setImportLoading(false);
+    try {
+      const importPreview = await api.previewCsvImport(csvText);
+      setPreview(importPreview);
+      const previewMessage = importPreview.rowsTruncated
+        ? `Preview ready: ${importPreview.summary.readyRows} leads can be imported. Showing first ${importPreview.maxPreviewRows ?? importPreview.rows.length} rows.`
+        : `Preview ready: ${importPreview.summary.readyRows} leads can be imported.`;
+      setPageSuccess(previewMessage);
+    } catch (error) {
+      setPreview(null);
+      handleApiError(error, 'Unable to parse uploaded file');
     } finally {
       setPreviewLoading(false);
-      event.target.value = '';
     }
   };
 
@@ -291,6 +328,7 @@ export default function BulkActionsClient() {
       setPreview(null);
       setCsvText('');
       setCsvFileName('');
+      setFileReady(false);
       await loadPageData();
     } catch (error) {
       handleApiError(error, 'Unable to import CSV');
@@ -552,8 +590,8 @@ export default function BulkActionsClient() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv"
-          onChange={handleCsvUpload}
+          accept=".csv,.xlsx,.xls"
+          onChange={handleChooseFile}
           className="hidden"
         />
         <Upload size={42} className="mx-auto mb-4 text-blue-600" />
@@ -567,7 +605,15 @@ export default function BulkActionsClient() {
             onClick={() => fileInputRef.current?.click()}
             className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
           >
-            {previewLoading ? 'Reading CSV...' : 'Choose CSV file'}
+            Choose File
+          </button>
+          <button
+            type="button"
+            onClick={handleUploadFile}
+            disabled={!fileReady || previewLoading}
+            className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {previewLoading ? 'Uploading...' : 'Upload File'}
           </button>
           {csvFileName ? <span className="text-sm font-medium text-slate-500">{csvFileName}</span> : null}
         </div>
@@ -601,6 +647,11 @@ export default function BulkActionsClient() {
                 <p className="text-sm text-slate-500">
                   Ready rows will be created. Duplicate and error rows stay out of the import.
                 </p>
+                {preview.rowsTruncated ? (
+                  <p className="mt-1 text-xs font-medium text-amber-700">
+                    Showing first {preview.maxPreviewRows ?? preview.rows.length} rows for review. Summary counts include the full file.
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"

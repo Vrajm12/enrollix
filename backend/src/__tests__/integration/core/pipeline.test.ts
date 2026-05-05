@@ -7,7 +7,7 @@ import { mockPrisma, resetAllMocks } from '../../mocks';
 import { createMockLead, createMockUser } from '../../utils/test-helpers';
 
 // @ts-ignore - test files excluded from compilation
-jest.mock('../../prisma', () => ({
+jest.mock('../../../prisma', () => ({
   prisma: mockPrisma
 }));
 
@@ -162,9 +162,11 @@ describe('Lead Pipeline & Status Management', () => {
       expect(isValidTransition('CONTACTED', 'LEAD')).toBe(false);
 
       // Should throw error on invalid transition
-      if (!isValidTransition('CONTACTED', 'LEAD')) {
-        throw new Error('Invalid transition: cannot move backwards in pipeline');
-      }
+      expect(() => {
+        if (!isValidTransition('CONTACTED', 'LEAD')) {
+          throw new Error('Invalid transition: cannot move backwards in pipeline');
+        }
+      }).toThrow('Invalid transition: cannot move backwards in pipeline');
     });
 
     it('should prevent reverse transition INTERESTED → CONTACTED', async () => {

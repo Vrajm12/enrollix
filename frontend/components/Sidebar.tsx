@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -15,16 +15,43 @@ import {
   BarChart3,
   Package,
   LogOut,
+  Shield,
 } from 'lucide-react';
 import { EnrollixLogoCompact } from '@/components/EnrollixLogo';
-import { clearSession } from '@/lib/auth';
+import { clearSession, getUser } from '@/lib/auth';
+
+type MenuItem = {
+  label: string;
+  href: string;
+  icon: any;
+  section: string;
+  badge?: number;
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(true);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [isTenantAdmin, setIsTenantAdmin] = useState(false);
 
-  const menuItems = [
+  useEffect(() => {
+    const currentUser = getUser();
+    setIsSuperAdmin(currentUser?.role === 'SUPER_ADMIN');
+    setIsTenantAdmin(currentUser?.role === 'TENANT_ADMIN' || currentUser?.role === 'ADMIN');
+  }, []);
+
+  const menuItems: MenuItem[] = [
+    ...(isSuperAdmin
+      ? [
+          {
+            label: 'Super Admin',
+            href: '/admin',
+            icon: Shield,
+            section: 'main',
+          },
+        ]
+      : []),
     {
       label: 'Dashboard',
       href: '/dashboard',
@@ -62,11 +89,10 @@ export default function Sidebar() {
       section: 'tools',
     },
     {
-      label: 'WhatsApp Chat',
+      label: 'WhatsApp (Soon)',
       href: '/whatsapp',
       icon: MessageCircle,
       section: 'communication',
-      badge: 12,
     },
     {
       label: 'Settings',
@@ -74,6 +100,9 @@ export default function Sidebar() {
       icon: Settings,
       section: 'settings',
     },
+    ...(isTenantAdmin
+      ? [{ label: 'Teams', href: '/teams', icon: Users, section: 'settings' as const }]
+      : []),
   ];
 
   const isActive = (href: string) =>
@@ -89,26 +118,26 @@ export default function Sidebar() {
       {/* Mobile Toggle */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 md:hidden p-2.5 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
+        className="fixed top-4 left-4 z-50 md:hidden p-2.5 rounded-lg bg-blue-700 text-white shadow-lg hover:bg-blue-800 transition-all duration-200 hover:scale-105"
       >
         {isOpen ? <X size={20} /> : <Menu size={20} />}
       </button>
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 h-screen w-60 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 text-white overflow-y-auto transition-all duration-300 z-40 shadow-2xl ${
+        className={`fixed top-0 left-0 h-screen w-60 bg-[#0e2f66] text-white overflow-y-auto transition-all duration-300 z-40 shadow-2xl ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0 border-r border-slate-700/50`}
+        } md:translate-x-0 border-r border-blue-900/50`}
       >
         {/* Logo */}
-        <div className="p-6 border-b border-slate-700/50 bg-gradient-to-r from-blue-600/10 to-purple-600/10">
+        <div className="p-6 border-b border-blue-900/50 bg-blue-900/20">
           <Link href="/" className="flex items-center gap-3 group">
             <div className="w-10 h-10 rounded-lg overflow-hidden shadow-lg shadow-blue-500/30 group-hover:shadow-xl transition-all duration-200 group-hover:scale-105">
               <EnrollixLogoCompact size={40} />
             </div>
             <div>
-              <h1 className="font-bold text-lg tracking-tight">Enrollix</h1>
-              <p className="text-xs text-slate-400 font-medium">Admission CRM</p>
+              <h1 className="font-bold text-lg tracking-tight">Guruverse</h1>
+              <p className="text-xs text-blue-200 font-medium">Guruverse CRM</p>
             </div>
           </Link>
         </div>
@@ -117,7 +146,7 @@ export default function Sidebar() {
         <nav className="p-4 space-y-8">
           {/* Main Section */}
           <div>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 px-3">
+            <div className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-4 px-3">
               Main
             </div>
             <div className="space-y-1.5">
@@ -133,8 +162,8 @@ export default function Sidebar() {
                       onClick={() => setIsOpen(false)}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
                         active
-                          ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/20'
-                          : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                          ? 'bg-white text-blue-800 shadow-lg'
+                          : 'text-blue-100 hover:bg-blue-800/70 hover:text-white'
                       }`}
                     >
                       <Icon size={18} className="flex-shrink-0" />
@@ -152,7 +181,7 @@ export default function Sidebar() {
 
           {/* Tools Section */}
           <div>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 px-3">
+            <div className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-4 px-3">
               Tools
             </div>
             <div className="space-y-1.5">
@@ -168,8 +197,8 @@ export default function Sidebar() {
                       onClick={() => setIsOpen(false)}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
                         active
-                          ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/20'
-                          : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                          ? 'bg-white text-blue-800 shadow-lg'
+                          : 'text-blue-100 hover:bg-blue-800/70 hover:text-white'
                       }`}
                     >
                       <Icon size={18} className="flex-shrink-0" />
@@ -187,7 +216,7 @@ export default function Sidebar() {
 
           {/* Communication Section */}
           <div>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 px-3">
+            <div className="text-xs font-bold text-blue-200 uppercase tracking-widest mb-4 px-3">
               Communication
             </div>
             <div className="space-y-1.5">
@@ -203,8 +232,8 @@ export default function Sidebar() {
                       onClick={() => setIsOpen(false)}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
                         active
-                          ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/20'
-                          : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                          ? 'bg-white text-blue-800 shadow-lg'
+                          : 'text-blue-100 hover:bg-blue-800/70 hover:text-white'
                       }`}
                     >
                       <Icon size={18} className="flex-shrink-0" />
@@ -222,22 +251,30 @@ export default function Sidebar() {
         </nav>
 
         {/* Settings & Logout */}
-        <div className="border-t border-slate-700/50 p-4 space-y-2">
-          <Link
-            href="/settings"
-            onClick={() => setIsOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
-              isActive('/settings')
-                ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/20'
-                : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
-            }`}
-          >
-            <Settings size={18} />
-            <span className="text-sm font-medium">Settings</span>
-          </Link>
+        <div className="border-t border-blue-900/50 p-4 space-y-2">
+          {menuItems
+            .filter((item) => item.section === 'settings')
+            .map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setIsOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                    isActive(item.href)
+                      ? 'bg-white text-blue-800 shadow-lg'
+                      : 'text-blue-100 hover:bg-blue-800/70 hover:text-white'
+                  }`}
+                >
+                  <Icon size={18} />
+                  <span className="text-sm font-medium">{item.label}</span>
+                </Link>
+              );
+            })}
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-all duration-200"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-blue-100 hover:bg-blue-800/70 transition-all duration-200"
           >
             <LogOut size={18} />
             <span className="text-sm font-medium">Logout</span>

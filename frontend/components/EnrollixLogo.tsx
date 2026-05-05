@@ -10,10 +10,10 @@ interface EnrollixLogoProps {
 }
 
 /**
- * Animated Enrollix Logo Component
+ * Animated Guruverse Logo Component
  * 
  * Modern, professional logo with:
- * - Gradient colors (blue to violet)
+ * - Gradient colors (fresh blue palette)
  * - Animated entrance effect
  * - Responsive sizing
  * - Accessibility support
@@ -106,19 +106,19 @@ export function EnrollixLogo({
       >
         <defs>
           <linearGradient
-            id="enrollix-gradient"
+            id="guruverse-gradient"
             x1="0%"
             y1="0%"
             x2="100%"
             y2="100%"
             gradientUnits="userSpaceOnUse"
           >
-            <stop offset="0%" stopColor="#3b82f6" />
+            <stop offset="0%" stopColor="#1d4ed8" />
             <stop offset="50%" stopColor="#2563eb" />
-            <stop offset="100%" stopColor="#7c3aed" />
+            <stop offset="100%" stopColor="#38bdf8" />
           </linearGradient>
 
-          <filter id="enrollix-shadow">
+          <filter id="guruverse-shadow">
             <feDropShadow
               dx="0"
               dy="2"
@@ -133,25 +133,32 @@ export function EnrollixLogo({
           cx="20"
           cy="20"
           r="19"
-          fill="url(#enrollix-gradient)"
+          fill="url(#guruverse-gradient)"
           opacity="0.15"
-          filter="url(#enrollix-shadow)"
+          filter="url(#guruverse-shadow)"
         />
 
-        {/* Main Shape - Stylized "E" with arrow */}
-        <g filter="url(#enrollix-shadow)">
-          {/* Vertical bar of E */}
-          <rect x="10" y="8" width="3" height="24" fill="url(#enrollix-gradient)" />
-
-          {/* Horizontal bars */}
-          <rect x="13" y="8" width="12" height="3" fill="url(#enrollix-gradient)" />
-          <rect x="13" y="17" width="10" height="3" fill="url(#enrollix-gradient)" />
-          <rect x="13" y="26" width="12" height="3" fill="url(#enrollix-gradient)" />
-
-          {/* Arrow accent */}
+        {/* Main Shape - Stylized "G" with arrow */}
+        <g filter="url(#guruverse-shadow)">
+          <path
+            d="M28 12.5a10.5 10.5 0 1 0 0 15"
+            stroke="url(#guruverse-gradient)"
+            strokeWidth="3"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <line
+            x1="20"
+            y1="20"
+            x2="30.5"
+            y2="20"
+            stroke="url(#guruverse-gradient)"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
           <path
             d="M28 16 L32 20 L28 24"
-            stroke="url(#enrollix-gradient)"
+            stroke="url(#guruverse-gradient)"
             strokeWidth="2.5"
             fill="none"
             strokeLinecap="round"
@@ -162,7 +169,7 @@ export function EnrollixLogo({
             y1="20"
             x2="31"
             y2="20"
-            stroke="url(#enrollix-gradient)"
+            stroke="url(#guruverse-gradient)"
             strokeWidth="2.5"
             strokeLinecap="round"
           />
@@ -174,7 +181,7 @@ export function EnrollixLogo({
           cy="20"
           r="18"
           fill="none"
-          stroke="url(#enrollix-gradient)"
+          stroke="url(#guruverse-gradient)"
           strokeWidth="1"
           opacity="0.3"
           animate={{
@@ -195,11 +202,11 @@ export function EnrollixLogo({
         initial="hidden"
         animate="visible"
       >
-        {'Enrollix'.split('').map((letter, index) => (
+        {'Guruverse'.split('').map((letter, index) => (
           <motion.span
             key={index}
             variants={letterVariants}
-            className={`font-bold tracking-tight bg-gradient-to-r from-blue-600 via-blue-600 to-violet-600 bg-clip-text text-transparent`}
+            className={`font-bold tracking-tight bg-gradient-to-r from-blue-700 via-blue-600 to-sky-500 bg-clip-text text-transparent`}
             style={{ fontSize: `${fontSize}px` }}
           >
             {letter}
@@ -221,12 +228,7 @@ export function EnrollixLogoCompact({
   className?: string;
 }) {
   return (
-    <motion.div
-      initial={{ scale: 0, rotate: -180 }}
-      animate={{ scale: 1, rotate: 0 }}
-      transition={{ type: 'spring', stiffness: 200 }}
-      className={className}
-    >
+    <div className={className}>
       <svg
         width={size}
         height={size}
@@ -236,28 +238,36 @@ export function EnrollixLogoCompact({
       >
         <defs>
           <linearGradient
-            id="enrollix-compact"
+            id="guruverse-compact"
             x1="0%"
             y1="0%"
             x2="100%"
             y2="100%"
           >
-            <stop offset="0%" stopColor="#3b82f6" />
-            <stop offset="100%" stopColor="#7c3aed" />
+            <stop offset="0%" stopColor="#1d4ed8" />
+            <stop offset="100%" stopColor="#38bdf8" />
           </linearGradient>
         </defs>
 
-        <circle cx="20" cy="20" r="20" fill="url(#enrollix-compact)" />
+        <circle cx="20" cy="20" r="20" fill="url(#guruverse-compact)" />
 
-        {/* E shape in white */}
-        <g fill="white">
-          <rect x="10" y="10" width="3" height="20" />
-          <rect x="13" y="10" width="10" height="2.5" />
-          <rect x="13" y="17.5" width="8" height="2.5" />
-          <rect x="13" y="25" width="10" height="2.5" />
-        </g>
-
-        {/* Arrow accent */}
+        {/* G shape in white */}
+        <path
+          d="M26.5 12a10 10 0 1 0 0 16"
+          stroke="white"
+          strokeWidth="2.8"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <line
+          x1="19"
+          y1="20"
+          x2="29"
+          y2="20"
+          stroke="white"
+          strokeWidth="2.8"
+          strokeLinecap="round"
+        />
         <path
           d="M26 16.5 L29 20 L26 23.5"
           stroke="white"
@@ -267,7 +277,7 @@ export function EnrollixLogoCompact({
           strokeLinejoin="round"
         />
       </svg>
-    </motion.div>
+    </div>
   );
 }
 

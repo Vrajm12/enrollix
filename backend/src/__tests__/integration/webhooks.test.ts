@@ -6,22 +6,23 @@
 import express from 'express';
 import request from 'supertest';
 // @ts-ignore - test files excluded from compilation
-import messagingRouter from '../../../routes/messaging';
+import { mockPrisma, resetAllMocks } from '../mocks';
 // @ts-ignore - test files excluded from compilation
-import { mockPrisma, resetAllMocks } from '../../mocks';
-// @ts-ignore - test files excluded from compilation
-import { createMockSMSMessage, createMockLead } from '../../utils/test-helpers';
+import { createMockSMSMessage, createMockLead } from '../utils/test-helpers';
 
-jest.mock('../../../prisma', () => ({
+(jest as any).unstable_mockModule('../../prisma', () => ({
   prisma: mockPrisma
 }));
 
-jest.mock('../../../services/twilio', () => ({
+(jest as any).unstable_mockModule('../../services/twilio', () => ({
   twilioService: {
     sendSMS: jest.fn(),
     getMessageStatus: jest.fn()
   }
 }));
+
+// @ts-ignore - dynamic import is required so ESM mocks are applied before module evaluation
+const { default: messagingRouter } = await import('../../routes/messaging');
 
 describe('SMS Webhook Integration Tests', () => {
   let app: express.Application;
@@ -117,7 +118,7 @@ describe('SMS Webhook Integration Tests', () => {
 
       expect(mockPrisma.sMSMessage.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { messageId: 'SM1234567890abcdef' },
+          where: { id: mockMessage.id },
           data: expect.objectContaining({
             errorCode: '21614'
           })

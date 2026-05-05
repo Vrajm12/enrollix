@@ -4,6 +4,7 @@ import { env } from "../config.js";
 
 export interface TokenPayload {
   id: number;
+  tenantId: number;
   name: string;
   email: string;
   role: Role;

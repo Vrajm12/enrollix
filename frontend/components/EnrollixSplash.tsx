@@ -10,9 +10,9 @@ interface EnrollixSplashProps {
 }
 
 /**
- * Enrollix Splash Screen / Loading Component
+ * Guruverse Splash Screen / Loading Component
  * 
- * Shows animated Enrollix logo with loading spinner
+ * Shows animated Guruverse logo with loading spinner
  * Perfect for initial page load, authentication, etc.
  */
 export function EnrollixSplash({ 
@@ -70,7 +70,7 @@ export function EnrollixSplash({
           transition={{ delay: 0.5, duration: 0.8 }}
         >
           <h1 className="text-4xl font-bold text-white mb-2 tracking-tight">
-            Enrollix
+            Guruverse
           </h1>
           <p className="text-slate-300 text-sm font-medium">
             Admission Management Platform

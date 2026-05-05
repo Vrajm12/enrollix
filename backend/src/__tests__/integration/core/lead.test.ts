@@ -7,7 +7,7 @@ import { mockPrisma, resetAllMocks } from '../../mocks';
 import { createMockLead, createMockUser } from '../../utils/test-helpers';
 
 // @ts-ignore - test files excluded from compilation
-jest.mock('../../prisma', () => ({
+jest.mock('../../../prisma', () => ({
   prisma: mockPrisma
 }));
 
@@ -138,9 +138,11 @@ describe('Lead Management Core Tests', () => {
       expect(duplicate?.id).toBe(1);
 
       // Prevent creation of duplicate
-      if (duplicate) {
-        throw new Error('Lead with this phone already exists');
-      }
+      expect(() => {
+        if (duplicate) {
+          throw new Error('Lead with this phone already exists');
+        }
+      }).toThrow('Lead with this phone already exists');
     });
 
     it('should allow similar phone numbers with different formatting', async () => {
@@ -235,9 +237,11 @@ describe('Lead Management Core Tests', () => {
       expect(counselor).toBeNull();
 
       // Validation should prevent assignment
-      if (!counselor) {
-        throw new Error('Counselor not found');
-      }
+      expect(() => {
+        if (!counselor) {
+          throw new Error('Counselor not found');
+        }
+      }).toThrow('Counselor not found');
     });
 
     it('should track assignment timestamp when assigned', async () => {

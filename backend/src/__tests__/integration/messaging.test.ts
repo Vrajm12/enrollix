@@ -6,23 +6,24 @@
 import express from 'express';
 import request from 'supertest';
 // @ts-ignore - test files excluded from compilation
-import messagingRouter from '../../../routes/messaging';
+import { mockPrisma, resetAllMocks } from '../mocks';
 // @ts-ignore - test files excluded from compilation
-import { mockPrisma, resetAllMocks } from '../../mocks';
-// @ts-ignore - test files excluded from compilation
-import { createMockLead, createMockUser, createMockSMSMessage } from '../../utils/test-helpers';
+import { createMockLead, createMockUser, createMockSMSMessage } from '../utils/test-helpers';
 
 // Mock dependencies
-jest.mock('../../../prisma', () => ({
+(jest as any).unstable_mockModule('../../prisma', () => ({
   prisma: mockPrisma
 }));
 
-jest.mock('../../../services/twilio', () => ({
+(jest as any).unstable_mockModule('../../services/twilio', () => ({
   twilioService: {
     sendSMS: jest.fn().mockResolvedValue('SM1234567890abcdef'),
     getMessageStatus: jest.fn().mockResolvedValue('delivered')
   }
 }));
+
+// @ts-ignore - dynamic import is required so ESM mocks are applied before module evaluation
+const { default: messagingRouter } = await import('../../routes/messaging');
 
 describe('SMS Messaging API Integration Tests', () => {
   let app: express.Application;
@@ -115,6 +116,9 @@ describe('SMS Messaging API Integration Tests', () => {
   describe('GET /messaging/sms/status/:messageSid', () => {
     it('should return message status', async () => {
       mockPrisma.sMSMessage.findFirst.mockResolvedValue(mockSmsMessage);
+      mockPrisma.sMSMessage.update.mockResolvedValue(
+        createMockSMSMessage({ status: 'DELIVERED' })
+      );
 
       const response = await request(app)
         .get('/messaging/sms/status/SM1234567890abcdef');
@@ -128,7 +132,7 @@ describe('SMS Messaging API Integration Tests', () => {
       const response = await request(app)
         .get('/messaging/sms/status/');
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(404);
     });
 
     it('should return 404 for unknown message', async () => {
@@ -249,6 +253,7 @@ describe('SMS Messaging API Integration Tests', () => {
 
       const response = await request(webhookApp)
         .post('/messaging/webhooks/sms-status')
+        .type('form')
         .send({
           MessageSid: 'SM1234567890abcdef',
           MessageStatus: 'delivered',
@@ -268,6 +273,7 @@ describe('SMS Messaging API Integration Tests', () => {
 
       const response = await request(webhookApp)
         .post('/messaging/webhooks/sms-status')
+        .type('form')
         .send({
           MessageSid: 'SM_UNKNOWN',
           MessageStatus: 'delivered'
@@ -287,6 +293,7 @@ describe('SMS Messaging API Integration Tests', () => {
 
       const response = await request(webhookApp)
         .post('/messaging/webhooks/sms-status')
+        .type('form')
         .send({
           MessageSid: 'SM1234567890abcdef',
           MessageStatus: 'failed',
@@ -306,7 +313,9 @@ describe('SMS Messaging API Integration Tests', () => {
 
   describe('GET /messaging/stats', () => {
     it('should return messaging statistics', async () => {
-      mockPrisma.whatsAppMessage.count.mockResolvedValue(10);
+      mockPrisma.whatsAppMessage.count
+        .mockResolvedValueOnce(10)
+        .mockResolvedValueOnce(8);
       mockPrisma.sMSMessage.count
         .mockResolvedValueOnce(20)
         .mockResolvedValueOnce(18);

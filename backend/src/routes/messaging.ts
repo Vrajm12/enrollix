@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { MessageStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
+import { validateResourceTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { env } from "../config.js";
 import { twilioService } from "../services/twilio.js";
@@ -46,9 +47,15 @@ router.post(
       return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Validate tenant access
+    if (!validateResourceTenant(req.user!.tenantId, lead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied for this lead" });
+    }
+
     // Create message record in database
     const message = await prisma.whatsAppMessage.create({
       data: {
+        tenantId: req.user!.tenantId,
         leadId: lead.id,
         sentBy: req.user!.id,
         message: parsed.data.message,
@@ -91,6 +98,11 @@ router.get(
       return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Validate tenant access
+    if (!validateResourceTenant(req.user!.tenantId, lead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied for this lead" });
+    }
+
     const messages = await prisma.whatsAppMessage.findMany({
       where: { leadId },
       include: {
@@ -123,9 +135,15 @@ router.post(
       return res.status(404).json({ message: "Lead not found" });
     }
 
+    // ✅ CRITICAL: Validate tenant access
+    if (!validateResourceTenant(req.user!.tenantId, lead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied for this lead" });
+    }
+
     // Create message record in database with PENDING status
     const message = await prisma.sMSMessage.create({
       data: {
+        tenantId: req.user!.tenantId,
         leadId: lead.id,
         sentBy: req.user!.id,
         message: parsed.data.message,
@@ -231,6 +249,7 @@ router.post(
       for (const lead of leads) {
         const message = await prisma.whatsAppMessage.create({
           data: {
+            tenantId: req.user!.tenantId,
             leadId: lead.id,
             sentBy: req.user!.id,
             message: parsed.data.message,
@@ -249,6 +268,7 @@ router.post(
           
           const message = await prisma.sMSMessage.create({
             data: {
+              tenantId: req.user!.tenantId,
               leadId: lead.id,
               sentBy: req.user!.id,
               message: parsed.data.message,
@@ -266,6 +286,7 @@ router.post(
           // Create message record with FAILED status
           const message = await prisma.sMSMessage.create({
             data: {
+              tenantId: req.user!.tenantId,
               leadId: lead.id,
               sentBy: req.user!.id,
               message: parsed.data.message,

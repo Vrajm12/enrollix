@@ -1,23 +1,23 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Inter } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const inter = Inter({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
   display: 'swap',
-  variable: '--font-google-sans',
+  variable: '--font-plus-jakarta-sans',
 });
 
 export const metadata: Metadata = {
-  title: "Enrollix - Admission CRM",
-  description: "Modern Admission Management CRM - Enrollix Platform",
+  title: "Guruverse - Admission CRM",
+  description: "Modern Admission Management CRM - Guruverse Platform",
   icons: {
     icon: [
       {
         media: "(prefers-color-scheme: light)",
-        url: "/favicon.ico",
-        href: "/favicon.ico",
+        url: "/favicon.svg",
+        href: "/favicon.svg",
       },
     ],
   },
@@ -29,8 +29,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={cn(inter.variable)}>
-      <body className="font-sans">{children}</body>
+    <html lang="en" suppressHydrationWarning className={cn(plusJakartaSans.variable)}>
+      <body className="font-sans [font-family:var(--font-plus-jakarta-sans)]">{children}</body>
     </html>
   );
 }

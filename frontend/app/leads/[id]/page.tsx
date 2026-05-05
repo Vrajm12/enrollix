@@ -4,17 +4,18 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
-import { ACTIVITY_TYPES, LEAD_STATUSES } from "@/lib/constants";
+import { ACTIVITY_TYPES, LEAD_STATUSES, SOURCES, COURSES } from "@/lib/constants";
 import { ApiError, api } from "@/lib/api";
-import { clearSession, getToken, getUser } from "@/lib/auth";
+import { clearSession, getToken, getUser, hasSession } from "@/lib/auth";
 import { Activity, ActivityType, Lead, Priority, User } from "@/lib/types";
 import { getPriorityColor, getStatusColor, formatDate, isOverdue } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Counselor = {
   id: number;
   name: string;
   email: string;
-  role: "ADMIN" | "COUNSELOR";
+  role: "TENANT_ADMIN" | "ADMIN" | "COUNSELOR";
 };
 
 export default function LeadDetailPage() {
@@ -26,13 +27,26 @@ export default function LeadDetailPage() {
   const [lead, setLead] = useState<Lead | null>(null);
   const [counselors, setCounselors] = useState<Counselor[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [courseOptions, setCourseOptions] = useState<string[]>(COURSES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingPriority, setSavingPriority] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingActivity, setSavingActivity] = useState(false);
   const [editingFollowUp, setEditingFollowUp] = useState(false);
+  const [savingLeadDetails, setSavingLeadDetails] = useState(false);
   const [followUpDate, setFollowUpDate] = useState("");
+  const [leadForm, setLeadForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    course: "",
+    source: "",
+    address: "",
+    region: "",
+    city: "",
+    parentContact: ""
+  });
   const [activityForm, setActivityForm] = useState<{
     type: ActivityType;
     notes: string;
@@ -56,23 +70,41 @@ export default function LeadDetailPage() {
     }
 
     try {
-      const [leadResponse, activitiesResponse, counselorResponse] = await Promise.all([
+      const [leadResponse, activitiesResponse, counselorResponse, courseResponse] = await Promise.all([
         api.getLead(leadId),
         api.getActivities(leadId),
-        api.getCounselors()
+        api.getCounselors(),
+        api.getCourseOptions()
       ]);
 
       setLead(leadResponse);
+      setLeadForm({
+        name: leadResponse.name ?? "",
+        email: leadResponse.email ?? "",
+        phone: leadResponse.phone ?? "",
+        course: leadResponse.course ?? "",
+        source: leadResponse.source ?? "",
+        address: leadResponse.address ?? "",
+        region: leadResponse.region ?? "",
+        city: leadResponse.city ?? "",
+        parentContact: leadResponse.parentContact ?? ""
+      });
       if (leadResponse.nextFollowUp) {
         const date = new Date(leadResponse.nextFollowUp);
         setFollowUpDate(date.toISOString().slice(0, 16));
       }
       setActivities(activitiesResponse);
       setCounselors(counselorResponse);
+      setCourseOptions(courseResponse.courseOptions.length > 0 ? courseResponse.courseOptions : COURSES);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        clearSession();
-        router.replace("/login");
+        if (!hasSession()) {
+          clearSession();
+          router.replace("/login");
+          return;
+        }
+
+        setError("Session verification failed for this request. Please retry; if it persists, sign in again.");
         return;
       }
       setError(err instanceof Error ? err.message : "Unable to load lead");
@@ -82,7 +114,7 @@ export default function LeadDetailPage() {
   };
 
   useEffect(() => {
-    if (!getToken()) {
+    if (!hasSession()) {
       router.replace("/login");
       return;
     }
@@ -123,6 +155,9 @@ export default function LeadDetailPage() {
       const updated = await api.updateLeadFollowup(leadId, new Date(followUpDate).toISOString());
       setLead(updated);
       setEditingFollowUp(false);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("followups_refresh_at", String(Date.now()));
+      }
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update follow-up");
@@ -161,6 +196,45 @@ export default function LeadDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to save activity");
     } finally {
       setSavingActivity(false);
+    }
+  };
+
+  const onSaveLeadDetails = async () => {
+    if (!lead) return;
+    setSavingLeadDetails(true);
+    try {
+      const updated = await api.updateLead(lead.id, {
+        name: leadForm.name.trim(),
+        phone: leadForm.phone.trim(),
+        email: leadForm.email.trim(),
+        course: leadForm.course.trim(),
+        source: leadForm.source.trim(),
+        address: leadForm.address.trim(),
+        region: leadForm.region.trim(),
+        city: leadForm.city.trim(),
+        parentContact: leadForm.parentContact.trim(),
+        status: lead.status,
+        priority: lead.priority,
+        assignedTo: lead.assignedTo,
+        nextFollowUp: lead.nextFollowUp
+      });
+      setLead(updated);
+      setLeadForm({
+        name: updated.name ?? "",
+        email: updated.email ?? "",
+        phone: updated.phone ?? "",
+        course: updated.course ?? "",
+        source: updated.source ?? "",
+        address: updated.address ?? "",
+        region: updated.region ?? "",
+        city: updated.city ?? "",
+        parentContact: updated.parentContact ?? ""
+      });
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save lead details");
+    } finally {
+      setSavingLeadDetails(false);
     }
   };
 
@@ -284,39 +358,87 @@ export default function LeadDetailPage() {
             <div className="grid gap-3 md:grid-cols-2">
               <input
                 type="text"
-                value={lead.name}
-                readOnly
+                value={leadForm.name}
+                onChange={(e) => setLeadForm((current) => ({ ...current, name: e.target.value }))}
                 placeholder="Name"
-                className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
               />
               <input
                 type="email"
-                value={lead.email ?? ""}
-                readOnly
+                value={leadForm.email}
+                onChange={(e) => setLeadForm((current) => ({ ...current, email: e.target.value }))}
                 placeholder="Email"
-                className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
               />
               <input
                 type="text"
-                value={lead.course ?? ""}
-                readOnly
-                placeholder="Course"
-                className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600"
+                value={leadForm.phone}
+                onChange={(e) => setLeadForm((current) => ({ ...current, phone: e.target.value }))}
+                placeholder="Phone"
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
               />
+              <Select value={leadForm.course} onValueChange={(value) => setLeadForm((current) => ({ ...current, course: value ?? "" }))}>
+                <SelectTrigger className="w-full rounded-md">
+                  <SelectValue placeholder="Select course" />
+                </SelectTrigger>
+                <SelectContent sideOffset={6} align="start" className="z-[120] max-h-64 overflow-y-auto">
+                  {courseOptions.map((course) => (
+                    <SelectItem key={course} value={course}>
+                      {course}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={leadForm.source} onValueChange={(value) => setLeadForm((current) => ({ ...current, source: value ?? "" }))}>
+                <SelectTrigger className="w-full rounded-md">
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent sideOffset={6} align="start" className="z-[120] max-h-64 overflow-y-auto">
+                  {SOURCES.map((source) => (
+                    <SelectItem key={source} value={source}>
+                      {source}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <input
                 type="text"
-                value={lead.source ?? ""}
-                readOnly
-                placeholder="Source"
-                className="rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600"
-              />
-              <input
-                type="text"
-                value={lead.address ?? ""}
-                readOnly
+                value={leadForm.address}
+                onChange={(e) => setLeadForm((current) => ({ ...current, address: e.target.value }))}
                 placeholder="Address"
-                className="col-span-2 rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600 md:col-span-2"
+                className="col-span-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 md:col-span-2"
               />
+              <input
+                type="text"
+                value={leadForm.region}
+                onChange={(e) => setLeadForm((current) => ({ ...current, region: e.target.value }))}
+                placeholder="Region"
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              />
+              <input
+                type="text"
+                value={leadForm.city}
+                onChange={(e) => setLeadForm((current) => ({ ...current, city: e.target.value }))}
+                placeholder="City"
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              />
+              <input
+                type="text"
+                value={leadForm.parentContact}
+                onChange={(e) => setLeadForm((current) => ({ ...current, parentContact: e.target.value }))}
+                placeholder="Parent contact"
+                className="col-span-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 md:col-span-2"
+              />
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={onSaveLeadDetails}
+                disabled={savingLeadDetails || !leadForm.name.trim() || !leadForm.phone.trim()}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingLeadDetails ? "Saving..." : "Save Changes"}
+              </button>
             </div>
           </div>
 

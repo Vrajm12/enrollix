@@ -1,4 +1,8 @@
 import dotenv from 'dotenv';
+import { jest } from '@jest/globals';
+
+// Preserve compatibility with existing tests that reference global `jest`.
+(globalThis as any).jest = jest;
 
 // Load test environment
 dotenv.config({ path: '.env.test' });

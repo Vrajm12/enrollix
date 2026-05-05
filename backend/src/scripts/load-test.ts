@@ -61,12 +61,13 @@ async function runLoadTest() {
   try {
     // Get or create counselor
     let counselor = await prisma.user.findFirst({
-      where: { email: "load-test@crm.com" },
+      where: { email: "load-test@crm.com", tenantId: 1 },
     });
 
     if (!counselor) {
       counselor = await prisma.user.create({
         data: {
+          tenantId: 1,
           email: "load-test@crm.com",
           password: "hashed",
           name: "Load Test Counselor",
@@ -86,6 +87,7 @@ async function runLoadTest() {
 
       const lead = await prisma.lead.create({
         data: {
+          tenantId: 1,
           name: `Load Test Lead ${i + 1}`,
           phone: `+919999${String(i).padStart(6, "0")}`,
           email: `load-test-${i}@example.com`,

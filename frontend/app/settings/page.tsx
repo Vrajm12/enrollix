@@ -5,9 +5,10 @@ import { Bell, Check, Globe, Lock, MessageSquare, Save, Settings2, Shield, UserC
 import Sidebar from '@/components/Sidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { clearSession, getToken, getUser } from '@/lib/auth';
+import { clearSession, getToken, getUser, hasSession } from '@/lib/auth';
 import { User } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import { ApiError, api } from '@/lib/api';
 
 type SettingsState = {
   displayName: string;
@@ -28,6 +29,12 @@ export default function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState('');
+  const [passwordState, setPasswordState] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
   const [settings, setSettings] = useState<SettingsState>({
     displayName: '',
     email: '',
@@ -41,7 +48,7 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    if (!getToken()) {
+    if (!hasSession()) {
       router.replace('/login');
       return;
     }
@@ -106,8 +113,29 @@ export default function SettingsPage() {
     setSaved(true);
   };
 
+  const handleChangePassword = async () => {
+    setPasswordMessage('');
+    if (passwordState.newPassword.length < 12) {
+      setPasswordMessage('New password must be at least 12 characters.');
+      return;
+    }
+    if (passwordState.newPassword !== passwordState.confirmPassword) {
+      setPasswordMessage('New password and confirm password must match.');
+      return;
+    }
+
+    try {
+      await api.changePassword(passwordState.currentPassword, passwordState.newPassword);
+      setPasswordState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswordMessage('Password updated successfully.');
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Unable to update password';
+      setPasswordMessage(message);
+    }
+  };
+
   return (
-    <div className="flex bg-gradient-to-br from-slate-50 via-white to-slate-100 min-h-screen">
+    <div className="flex bg-slate-50 min-h-screen">
       <Sidebar />
 
       <main className="flex-1 md:ml-60 flex flex-col">
@@ -144,7 +172,7 @@ export default function SettingsPage() {
               <section className="space-y-8">
                 <div className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm">
                   <div className="mb-6 flex items-start gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-lg font-bold text-white shadow-lg shadow-blue-500/20">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-700 text-lg font-bold text-white shadow-lg shadow-blue-300/40">
                       {initials}
                     </div>
                     <div>
@@ -301,7 +329,7 @@ export default function SettingsPage() {
 
                 <div className="rounded-3xl border border-slate-200/70 bg-white p-6 shadow-sm">
                   <div className="mb-5 flex items-start gap-3">
-                    <div className="rounded-2xl bg-violet-50 p-3 text-violet-600">
+                    <div className="rounded-2xl bg-blue-50 p-3 text-blue-700">
                       <Shield size={18} />
                     </div>
                     <div>
@@ -314,7 +342,7 @@ export default function SettingsPage() {
                     {[
                       { icon: UserCircle2, label: 'Account session', value: 'Active on this browser', tone: 'text-emerald-600 bg-emerald-50' },
                       { icon: MessageSquare, label: 'WhatsApp channel', value: 'Configured in CRM', tone: 'text-blue-600 bg-blue-50' },
-                      { icon: Lock, label: 'JWT security', value: 'Protected by backend auth', tone: 'text-violet-600 bg-violet-50' },
+                      { icon: Lock, label: 'JWT security', value: 'Protected by backend auth', tone: 'text-blue-700 bg-blue-50' },
                     ].map((item) => {
                       const Icon = item.icon;
                       return (
@@ -334,6 +362,46 @@ export default function SettingsPage() {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-blue-100 bg-white p-6 shadow-sm">
+                  <div className="mb-5 flex items-start gap-3">
+                    <div className="rounded-2xl bg-blue-50 p-3 text-blue-700">
+                      <Lock size={18} />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">Change Password</h2>
+                      <p className="mt-1 text-sm text-slate-600">Update your profile password securely.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Input
+                      type="password"
+                      value={passwordState.currentPassword}
+                      onChange={(e) => setPasswordState({ ...passwordState, currentPassword: e.target.value })}
+                      placeholder="Current password"
+                      className="h-11 rounded-xl border-blue-200"
+                    />
+                    <Input
+                      type="password"
+                      value={passwordState.newPassword}
+                      onChange={(e) => setPasswordState({ ...passwordState, newPassword: e.target.value })}
+                      placeholder="New password (min 12 chars)"
+                      className="h-11 rounded-xl border-blue-200"
+                    />
+                    <Input
+                      type="password"
+                      value={passwordState.confirmPassword}
+                      onChange={(e) => setPasswordState({ ...passwordState, confirmPassword: e.target.value })}
+                      placeholder="Confirm new password"
+                      className="h-11 rounded-xl border-blue-200"
+                    />
+                    <Button onClick={handleChangePassword} className="h-11 w-full rounded-xl bg-blue-600 text-white hover:bg-blue-700">
+                      Update Password
+                    </Button>
+                    {passwordMessage ? <p className="text-sm text-blue-700">{passwordMessage}</p> : null}
                   </div>
                 </div>
               </aside>

@@ -15,3 +15,19 @@ export const ACTIVITY_TYPES: { value: ActivityType; label: string }[] = [
   { value: "EMAIL", label: "Email" },
   { value: "NOTE", label: "Note" }
 ];
+
+export const COURSES = [
+  "B.Tech Computer Science",
+  "B.Tech Electronics",
+  "BCA",
+  "B.Sc Mathematics",
+  "MBA"
+];
+
+export const SOURCES = [
+  "Website",
+  "Social Media",
+  "Referral",
+  "Advertisement",
+  "Walk-in"
+];

@@ -61,12 +61,13 @@ async function runDemo() {
     // Step 1: Get or create counselors
     console.log("\n📌 Step 1: Setting up counselors...");
     let counselor1 = await prisma.user.findFirst({
-      where: { email: "counselor1@crm.com" },
+      where: { email: "counselor1@crm.com", tenantId: 1 },
     });
 
     if (!counselor1) {
       counselor1 = await prisma.user.create({
         data: {
+          tenantId: 1,
           email: "counselor1@crm.com",
           password: "hashed_password",
           name: "Rajesh Kumar",
@@ -77,12 +78,13 @@ async function runDemo() {
     }
 
     let counselor2 = await prisma.user.findFirst({
-      where: { email: "counselor2@crm.com" },
+      where: { email: "counselor2@crm.com", tenantId: 1 },
     });
 
     if (!counselor2) {
       counselor2 = await prisma.user.create({
         data: {
+          tenantId: 1,
           email: "counselor2@crm.com",
           password: "hashed_password",
           name: "Priya Sharma",
@@ -101,6 +103,7 @@ async function runDemo() {
 
       const lead = await prisma.lead.create({
         data: {
+          tenantId: 1,
           name: leadData.name,
           phone: leadData.phone,
           email: leadData.email,
@@ -133,6 +136,7 @@ async function runDemo() {
         // Create activity with follow-up
         const activity = await prisma.activity.create({
           data: {
+            tenantId: 1,
             leadId: lead.id,
             type: activityType as any,
             notes: `${activityType} - Day ${dayOffset + 1} follow-up`,

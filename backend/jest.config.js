@@ -1,11 +1,16 @@
 export default {
-  preset: 'ts-jest',
+  preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
-  testMatch: [
-    '**/__tests__/**/*.ts',
-    '**/?(*.)+(spec|test).ts'
-  ],
+  testMatch: ['**/?(*.)+(spec|test).ts'],
+  extensionsToTreatAsEsm: ['.ts'],
+  moduleNameMapper: {
+    '^\\.\\./\\.\\./\\.\\./prisma$': '<rootDir>/src/prisma',
+    '^\\.\\./\\.\\./prisma$': '<rootDir>/src/prisma',
+    '^\\.\\./\\.\\./services/twilio$': '<rootDir>/src/services/twilio',
+    '^\\.\\./\\.\\./\\.\\./services/twilio$': '<rootDir>/src/services/twilio',
+    '^(\\.{1,2}/.*)\\.js$': '$1'
+  },
   moduleFileExtensions: ['ts', 'js', 'json'],
   collectCoverageFrom: [
     'src/**/*.ts',
@@ -35,12 +40,14 @@ export default {
   },
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
   testTimeout: 10000,
-  globals: {
-    'ts-jest': {
+  transform: {
+    '^.+\\.ts$': ['ts-jest', {
+      useESM: true,
       tsconfig: {
         esModuleInterop: true,
-        allowSyntheticDefaultImports: true
+        allowSyntheticDefaultImports: true,
+        isolatedModules: true
       }
-    }
+    }]
   }
 };

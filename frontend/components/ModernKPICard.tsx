@@ -8,23 +8,23 @@ interface KPICardProps {
   trend?: number;
   subtitle?: string;
   icon?: React.ReactNode;
-  color?: 'blue' | 'green' | 'orange' | 'purple' | 'red';
+  color?: 'blue' | 'green' | 'cyan' | 'sky' | 'red';
   comparison?: string;
 }
 
 const colorStyles = {
-  blue: 'from-blue-600/10 to-blue-600/5 border-blue-200/30',
-  green: 'from-green-600/10 to-green-600/5 border-green-200/30',
-  orange: 'from-orange-600/10 to-orange-600/5 border-orange-200/30',
-  purple: 'from-purple-600/10 to-purple-600/5 border-purple-200/30',
+  blue: 'from-blue-600/10 to-blue-500/5 border-blue-200/50',
+  green: 'from-emerald-600/10 to-emerald-500/5 border-emerald-200/50',
+  cyan: 'from-cyan-600/10 to-cyan-500/5 border-cyan-200/50',
+  sky: 'from-sky-600/10 to-sky-500/5 border-sky-200/50',
   red: 'from-red-600/10 to-red-600/5 border-red-200/30',
 };
 
 const iconColors = {
   blue: 'text-blue-600',
-  green: 'text-green-600',
-  orange: 'text-orange-600',
-  purple: 'text-purple-600',
+  green: 'text-emerald-600',
+  cyan: 'text-cyan-600',
+  sky: 'text-sky-600',
   red: 'text-red-600',
 };
 
@@ -41,7 +41,7 @@ export function ModernKPICard({
 
   return (
     <div
-      className={`bg-gradient-to-br ${colorStyles[color]} border border-slate-200/30 rounded-2xl p-6 backdrop-blur-xl hover:shadow-xl transition-all duration-300 hover:scale-105 group`}
+      className={`bg-gradient-to-br ${colorStyles[color]} border rounded-2xl p-6 bg-white hover:shadow-md transition-all duration-300 hover:translate-y-[-1px] group`}
     >
       <div className="space-y-4">
         {/* Header */}

@@ -6,17 +6,23 @@
 import express from 'express';
 import request from 'supertest';
 // @ts-ignore - test files excluded from compilation
-import messagingRouter from '../../../routes/messaging';
+import { mockPrisma, resetAllMocks } from '../mocks';
 // @ts-ignore - test files excluded from compilation
-import { mockPrisma, resetAllMocks } from '../../mocks';
-// @ts-ignore - test files excluded from compilation
-import { createMockLead, createMockUser, createMockSMSMessage } from '../../utils/test-helpers';
+import { createMockLead, createMockUser, createMockSMSMessage } from '../utils/test-helpers';
 
-jest.mock('../../../prisma', () => ({
+(jest as any).unstable_mockModule('../../prisma', () => ({
   prisma: mockPrisma
 }));
 
-jest.mock('../../../services/twilio');
+(jest as any).unstable_mockModule('../../services/twilio', () => ({
+  twilioService: {
+    sendSMS: jest.fn().mockResolvedValue('SM_TEST_123456'),
+    getMessageStatus: jest.fn().mockResolvedValue('delivered')
+  }
+}));
+
+// @ts-ignore - dynamic import is required so ESM mocks are applied before module evaluation
+const { default: messagingRouter } = await import('../../routes/messaging');
 
 describe('SMS Lifecycle E2E Tests', () => {
   let app: express.Application;
@@ -354,6 +360,10 @@ describe('SMS Lifecycle E2E Tests', () => {
 
       // Verify immediately after send
       mockPrisma.sMSMessage.findFirst.mockResolvedValue(message);
+      mockPrisma.sMSMessage.update.mockResolvedValue({
+        ...message,
+        status: 'DELIVERED'
+      });
 
       const immediateStatus = await request(app)
         .get(`/messaging/sms/status/${sentMessageId}`);

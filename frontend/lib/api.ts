@@ -1,5 +1,6 @@
-import { getToken } from "./auth";
+import { clearStoredToken, getToken } from "./auth";
 import { Activity, ActivityType, Lead, LeadStatus, Priority, User } from "./types";
+import { getTenantSlugFromHost } from "./tenant";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
@@ -22,24 +23,39 @@ const request = async <T>(
   path: string,
   { method = "GET", body, authenticated = true }: RequestOptions = {}
 ): Promise<T> => {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json"
+  const baseHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
   };
+  const tenantSlug = getTenantSlugFromHost();
+  if (tenantSlug) {
+    baseHeaders["X-Tenant-Slug"] = tenantSlug;
+  }
 
-  if (authenticated) {
-    const token = getToken();
-    if (!token) {
-      throw new ApiError("Session expired. Please log in again.", 401);
-    }
+  const token = authenticated ? getToken() : null;
+  const headers: Record<string, string> = { ...baseHeaders };
+
+  if (authenticated && token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store"
-  });
+  const execute = async (requestHeaders: Record<string, string>) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: requestHeaders,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: "include",
+      cache: "no-store",
+    });
+
+  let response = await execute(headers);
+
+  // Retry once without Authorization header in case local token is stale.
+  if (authenticated && token && response.status === 401) {
+    response = await execute(baseHeaders);
+    if (response.ok) {
+      clearStoredToken();
+    }
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -53,45 +69,68 @@ const request = async <T>(
 export const api = {
   // Auth
   login: (email: string, password: string) =>
-    request<{ token: string; user: User }>("/auth/login", {
+    request<{ token?: string; user: User }>("/auth/login", {
       method: "POST",
-      body: { email, password },
-      authenticated: false
+      body: { email, password, tenantSlug: getTenantSlugFromHost() ?? undefined },
+      authenticated: false,
     }),
+  me: () => request<{ user: User }>("/auth/me"),
 
   // Dashboard
+  getFollowupsByDate: (date: string, page = 1, pageSize = 25) =>
+    request<{
+      items: Lead[];
+      total: number;
+      page: number;
+      pageSize: number;
+      totalPages: number;
+      counts: {
+        selectedDate: number;
+        today: number;
+        missed: number;
+      };
+    }>(`/dashboard/followups?date=${encodeURIComponent(date)}&page=${page}&pageSize=${pageSize}`),
   getTodayFollowups: () => request<Lead[]>("/dashboard/followups/today"),
   getMissedFollowups: () => request<Lead[]>("/dashboard/followups/missed"),
   getLeadsByStatus: () => request<Record<string, Lead[]>>("/dashboard/leads/by-status"),
 
   // Leads
-  getLeads: () => request<Lead[]>("/leads"),
+  getLeads: (filters?: { region?: string; city?: string; course?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.region) params.append("region", filters.region);
+    if (filters?.city) params.append("city", filters.city);
+    if (filters?.course) params.append("course", filters.course);
+    const query = params.toString();
+    return request<Lead[]>(`/leads${query ? `?${query}` : ""}`);
+  },
   getLead: (id: number) => request<Lead>(`/leads/${id}`),
   createLead: (payload: Partial<Lead>) =>
     request<Lead>("/leads", {
       method: "POST",
-      body: payload
+      body: payload,
     }),
   updateLead: (id: number, payload: Partial<Lead>) =>
     request<Lead>(`/leads/${id}`, {
       method: "PUT",
-      body: payload
+      body: payload,
     }),
   updateLeadStatus: (id: number, status: LeadStatus) =>
     request<Lead>(`/leads/${id}/status`, {
       method: "PATCH",
-      body: { status }
+      body: { status },
     }),
   updateLeadPriority: (id: number, priority: Priority) =>
     request<Lead>(`/leads/${id}/priority`, {
       method: "PATCH",
-      body: { priority }
+      body: { priority },
     }),
   updateLeadFollowup: (id: number, nextFollowUp: string) =>
     request<Lead>(`/leads/${id}/followup`, {
       method: "PATCH",
-      body: { nextFollowUp }
+      body: { nextFollowUp },
     }),
+
+  // Bulk actions
   previewCsvImport: (csv: string) =>
     request<{
       headers: string[];
@@ -119,9 +158,11 @@ export const api = {
         duplicateRows: number;
         errorRows: number;
       };
+      rowsTruncated?: boolean;
+      maxPreviewRows?: number;
     }>("/bulk/import/csv/preview", {
       method: "POST",
-      body: { csv }
+      body: { csv },
     }),
   commitCsvImport: (csv: string) =>
     request<{
@@ -143,9 +184,11 @@ export const api = {
         name: string;
         reason: string;
       }>;
+      rowsTruncated?: boolean;
+      maxPreviewRows?: number;
     }>("/bulk/import/csv/commit", {
       method: "POST",
-      body: { csv }
+      body: { csv },
     }),
   bulkUpdateLeads: (payload: {
     leadIds: number[];
@@ -163,7 +206,7 @@ export const api = {
       ignoredCount: number;
     }>("/bulk/leads", {
       method: "PATCH",
-      body: payload
+      body: payload,
     }),
   exportLeads: (payload: {
     filters?: {
@@ -179,7 +222,7 @@ export const api = {
       csv: string;
     }>("/bulk/export", {
       method: "POST",
-      body: payload
+      body: payload,
     }),
 
   // Activities
@@ -192,103 +235,122 @@ export const api = {
   }) =>
     request<Activity>("/activities", {
       method: "POST",
-      body: payload
+      body: payload,
     }),
 
   // Users
+  getCourseOptions: () =>
+    request<{
+      courseOptions: string[];
+    }>("/users/course-options"),
   getCounselors: () =>
     request<
       {
         id: number;
         name: string;
         email: string;
-        role: "ADMIN" | "COUNSELOR";
+        role: "TENANT_ADMIN" | "ADMIN" | "COUNSELOR";
       }[]
     >("/users/counselors"),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ success: boolean; message: string }>("/users/change-password", {
+      method: "POST",
+      body: { currentPassword, newPassword },
+    }),
+  getTeamUsers: () =>
+    request<{
+      users: {
+        id: number;
+        name: string;
+        email: string;
+        role: "TENANT_ADMIN" | "ADMIN" | "COUNSELOR";
+        createdAt: string;
+      }[];
+    }>("/users/team"),
+  createTeamUser: (payload: { email: string; name: string; role: "ADMIN" | "COUNSELOR" }) =>
+    request<{
+      user: {
+        id: number;
+        name: string;
+        email: string;
+        role: "ADMIN" | "COUNSELOR";
+        createdAt: string;
+      };
+      temporaryPassword: string;
+    }>("/users/team", { method: "POST", body: payload }),
+  allocateLeadRange: (payload: { userId: number; startLeadNumber: number; endLeadNumber: number }) =>
+    request<{
+      success: boolean;
+      message: string;
+      allocatedCount: number;
+      range: { startLeadNumber: number; endLeadNumber: number };
+      totalTenantLeads: number;
+      assignee: { id: number; name: string; email: string; role: "ADMIN" | "COUNSELOR" };
+    }>("/users/team/allocate-leads", {
+      method: "POST",
+      body: payload
+    }),
 
   // Messaging - WhatsApp
   sendWhatsApp: (leadId: number, message: string, mediaUrl?: string) =>
     request("/messaging/whatsapp/send", {
       method: "POST",
-      body: { leadId, message, mediaUrl }
+      body: { leadId, message, mediaUrl },
     }),
-  getWhatsAppThread: (leadId: number) =>
-    request(`/messaging/whatsapp/thread/${leadId}`),
+  getWhatsAppThread: (leadId: number) => request(`/messaging/whatsapp/thread/${leadId}`),
 
   // Messaging - SMS
   sendSMS: (leadId: number, message: string) =>
     request("/messaging/sms/send", {
       method: "POST",
-      body: { leadId, message }
+      body: { leadId, message },
     }),
-  getSMSThread: (leadId: number) =>
-    request(`/messaging/sms/thread/${leadId}`),
-
-  // Bulk Messaging
+  getSMSThread: (leadId: number) => request(`/messaging/sms/thread/${leadId}`),
   sendBulkMessage: (leadIds: number[], message: string, type: "whatsapp" | "sms") =>
     request("/messaging/bulk/send", {
       method: "POST",
-      body: { leadIds, message, type }
+      body: { leadIds, message, type },
     }),
+  getMessagingStats: () => request("/messaging/stats"),
 
-  // Messaging Statistics
-  getMessagingStats: () =>
-    request("/messaging/stats"),
-
-  // Reporting - Funnel
+  // Reporting
   getFunnelReport: (startDate?: string, endDate?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     return request(`/reports/funnel?${params.toString()}`);
   },
-
-  // Reporting - Revenue
   getRevenueReport: (startDate?: string, endDate?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     return request(`/reports/revenue?${params.toString()}`);
   },
-
-  // Reporting - Team Performance
   getTeamPerformanceReport: (startDate?: string, endDate?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     return request(`/reports/team-performance?${params.toString()}`);
   },
-
-  // Reporting - Lead Sources
   getLeadSourcesReport: (startDate?: string, endDate?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     return request(`/reports/lead-sources?${params.toString()}`);
   },
-
-  // Reporting - Priority Distribution
   getPriorityDistributionReport: (startDate?: string, endDate?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     return request(`/reports/priority-distribution?${params.toString()}`);
   },
-
-  // Save Report
-  saveReport: (reportType: string, data: any, filters?: any) =>
+  saveReport: (reportType: string, data: unknown, filters?: unknown) =>
     request("/reports/save", {
       method: "POST",
-      body: { reportType, data, filters }
+      body: { reportType, data, filters },
     }),
-
-  // Get Saved Reports
-  getSavedReports: () =>
-    request("/reports/saved"),
-
-  // Get Specific Saved Report
-  getSavedReport: (id: number) =>
-    request(`/reports/saved/${id}`)
+  getSavedReports: () => request("/reports/saved"),
+  getSavedReport: (id: number) => request(`/reports/saved/${id}`),
 };
 
 export { ApiError };

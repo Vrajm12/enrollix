@@ -18,14 +18,14 @@ interface ActivityTimelineProps {
 const iconMap = {
   call: { icon: Phone, color: 'bg-blue-100 text-blue-600' },
   whatsapp: { icon: MessageCircle, color: 'bg-green-100 text-green-600' },
-  email: { icon: Mail, color: 'bg-purple-100 text-purple-600' },
-  note: { icon: FileText, color: 'bg-yellow-100 text-yellow-600' },
+  email: { icon: Mail, color: 'bg-cyan-100 text-cyan-600' },
+  note: { icon: FileText, color: 'bg-blue-100 text-blue-700' },
   status: { icon: CheckCircle2, color: 'bg-emerald-100 text-emerald-600' },
 };
 
 export function ActivityTimeline({ activities }: ActivityTimelineProps) {
   return (
-    <div className="bg-gradient-to-br from-slate-900/5 to-slate-900/10 border border-slate-200/30 rounded-2xl p-8 backdrop-blur-xl">
+    <div className="bg-white border border-blue-100 rounded-2xl p-8">
       <div className="mb-8">
         <h2 className="text-lg font-bold text-slate-900">Recent Activities</h2>
         <p className="text-sm text-slate-500 mt-1">Last 10 actions across your leads</p>
@@ -43,7 +43,7 @@ export function ActivityTimeline({ activities }: ActivityTimelineProps) {
                   <Icon size={18} />
                 </div>
                 {index < activities.length - 1 && (
-                  <div className="w-0.5 h-16 bg-gradient-to-b from-slate-300/50 to-transparent mt-2" />
+                  <div className="w-0.5 h-16 bg-gradient-to-b from-blue-200 to-transparent mt-2" />
                 )}
               </div>
 
@@ -67,7 +67,7 @@ export function ActivityTimeline({ activities }: ActivityTimelineProps) {
       </div>
 
       {/* View all button */}
-      <button className="w-full mt-8 py-3 px-4 rounded-lg border border-slate-200/30 text-slate-600 font-medium text-sm hover:bg-slate-100/50 transition-all duration-200">
+      <button className="w-full mt-8 py-3 px-4 rounded-lg border border-blue-200 text-blue-700 font-medium text-sm hover:bg-blue-50 transition-all duration-200">
         View All Activities
       </button>
     </div>

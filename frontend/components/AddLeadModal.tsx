@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,30 +11,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { X } from 'lucide-react';
-
-const COURSES = [
-  'B.Tech Computer Science',
-  'B.Tech Electronics',
-  'BCA',
-  'B.Sc Mathematics',
-  'MBA',
-];
-
-const SOURCES = [
-  'Website',
-  'Social Media',
-  'Referral',
-  'Advertisement',
-  'Walk-in',
-];
+import { api } from '@/lib/api';
+import { COURSES, SOURCES } from '@/lib/constants';
 
 interface AddLeadModalProps {
   open: boolean;
@@ -49,12 +27,15 @@ export function AddLeadModal({
   onSubmit,
   isLoading = false,
 }: AddLeadModalProps) {
+  const [courseOptions, setCourseOptions] = useState<string[]>(COURSES);
   const [formData, setFormData] = useState<{
     name: string;
     email: string;
     phone: string;
     course: string;
     source: string;
+    region: string;
+    city: string;
     parentName: string;
     parentPhone: string;
   }>({
@@ -63,6 +44,8 @@ export function AddLeadModal({
     phone: '',
     course: '',
     source: '',
+    region: '',
+    city: '',
     parentName: '',
     parentPhone: '',
   });
@@ -76,27 +59,41 @@ export function AddLeadModal({
       phone: '',
       course: '',
       source: '',
+      region: '',
+      city: '',
       parentName: '',
       parentPhone: '',
     });
     onOpenChange(false);
   };
 
+  useEffect(() => {
+    if (!open) return;
+    void api
+      .getCourseOptions()
+      .then((response) => {
+        setCourseOptions(response.courseOptions.length > 0 ? response.courseOptions : COURSES);
+      })
+      .catch(() => {
+        setCourseOptions(COURSES);
+      });
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden bg-white">
+      <DialogContent className="sm:max-w-[500px] p-0 bg-white overflow-visible">
         <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4">
           <DialogHeader>
             <DialogTitle className="text-white text-lg font-bold">
               Add New Lead
             </DialogTitle>
             <DialogDescription className="text-blue-100">
-              Quickly add a new student lead to your pipeline
+              Quickly add a new student lead to your pipeline (Updated form)
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           {/* Student Info */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold text-slate-900">Student Information</h3>
@@ -143,34 +140,67 @@ export function AddLeadModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1 block">Course *</label>
-                <Select value={formData.course || ''} onValueChange={(value) => value && setFormData({...formData, course: value})}>
-                  <SelectTrigger disabled={isLoading}>
-                    <SelectValue placeholder="Select course" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COURSES.map((course) => (
-                      <SelectItem key={course} value={course}>
-                        {course}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={formData.course}
+                  onChange={(e) => setFormData({ ...formData, course: e.target.value })}
+                  disabled={isLoading}
+                  required
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="" disabled>
+                    Select course (dropdown)
+                  </option>
+                  {courseOptions.map((course) => (
+                    <option key={course} value={course}>
+                      {course}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1 block">Source *</label>
-                <Select value={formData.source || ''} onValueChange={(value) => value && setFormData({...formData, source: value})}>
-                  <SelectTrigger disabled={isLoading}>
-                    <SelectValue placeholder="How did they find us?" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SOURCES.map((source) => (
-                      <SelectItem key={source} value={source}>
-                        {source}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select
+                  value={formData.source}
+                  onChange={(e) => setFormData({ ...formData, source: e.target.value })}
+                  disabled={isLoading}
+                  required
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="" disabled>
+                    Select source (dropdown)
+                  </option>
+                  {SOURCES.map((source) => (
+                    <option key={source} value={source}>
+                      {source}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Region</label>
+                <Input
+                  type="text"
+                  placeholder="e.g. West"
+                  value={formData.region}
+                  onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                  className="rounded-lg border-slate-200"
+                  disabled={isLoading}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">City</label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Pune"
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  className="rounded-lg border-slate-200"
+                  disabled={isLoading}
+                />
               </div>
             </div>
           </div>

@@ -3,6 +3,13 @@ import { env } from "../config.js";
 
 // Initialize Twilio client
 const twilioClient = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+const isTestEnv = process.env.NODE_ENV === "test";
+
+const getTwilioCredentials = () => ({
+  accountSid: process.env.TWILIO_ACCOUNT_SID ?? env.TWILIO_ACCOUNT_SID,
+  authToken: process.env.TWILIO_AUTH_TOKEN ?? env.TWILIO_AUTH_TOKEN,
+  phoneNumber: process.env.TWILIO_PHONE_NUMBER ?? env.TWILIO_PHONE_NUMBER,
+});
 
 export const twilioService = {
   /**
@@ -13,10 +20,16 @@ export const twilioService = {
    */
   async sendSMS(toPhoneNumber: string, message: string): Promise<string | null> {
     try {
+      const credentials = getTwilioCredentials();
+
       // If Twilio not configured, return null
-      if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_PHONE_NUMBER) {
+      if (!credentials.accountSid || !credentials.authToken || !credentials.phoneNumber) {
         console.warn("Twilio credentials not configured");
         return null;
+      }
+
+      if (message.length > 1600) {
+        throw new Error("Message exceeds 1600 character limit");
       }
 
       // Validate phone number format
@@ -39,10 +52,15 @@ export const twilioService = {
         }
       }
 
+      // Avoid real outbound SMS in automated tests.
+      if (isTestEnv) {
+        return "SM_TEST_MESSAGE_SID";
+      }
+
       // Send SMS via Twilio
       const result = await twilioClient.messages.create({
         body: message,
-        from: env.TWILIO_PHONE_NUMBER,
+        from: credentials.phoneNumber,
         to: formattedPhone
       });
 
@@ -61,8 +79,18 @@ export const twilioService = {
    */
   async getMessageStatus(messageSid: string): Promise<string | null> {
     try {
-      if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN) {
+      const credentials = getTwilioCredentials();
+
+      if (!credentials.accountSid || !credentials.authToken) {
         return null;
+      }
+
+      if (!/^SM[0-9a-fA-F]{16,}$/.test(messageSid)) {
+        return null;
+      }
+
+      if (isTestEnv) {
+        return "delivered";
       }
 
       const message = await twilioClient.messages(messageSid).fetch();

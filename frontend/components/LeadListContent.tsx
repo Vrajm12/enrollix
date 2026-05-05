@@ -20,6 +20,9 @@ export function LeadListContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [regionFilter, setRegionFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [courseFilter, setCourseFilter] = useState("");
   const [activeTab, setActiveTab] = useState<LeadStatus | "ALL">(
     (searchParams.get("status") as LeadStatus) || "ALL"
   );
@@ -27,7 +30,11 @@ export function LeadListContent() {
   const loadLeads = async () => {
     setLoading(true);
     try {
-      const response = await api.getLeads();
+      const response = await api.getLeads({
+        region: regionFilter || undefined,
+        city: cityFilter || undefined,
+        course: courseFilter || undefined
+      });
       setLeads(response || []);
       setError(null);
     } catch (err) {
@@ -44,7 +51,7 @@ export function LeadListContent() {
 
   useEffect(() => {
     void loadLeads();
-  }, []);
+  }, [regionFilter, cityFilter, courseFilter]);
 
   useEffect(() => {
     let filtered = leads;
@@ -68,14 +75,10 @@ export function LeadListContent() {
 
     setFilteredLeads(filtered);
 
-    // Auto-select first lead if none selected
-    if (filtered.length > 0 && !selectedLead) {
-      setSelectedLead(filtered[0]);
-    }
   }, [leads, activeTab, searchTerm, selectedLead]);
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-[#f3f8ff]">
       {/* Sidebar */}
       <Sidebar />
 
@@ -94,7 +97,7 @@ export function LeadListContent() {
               </div>
               <Link
                 href="/dashboard"
-                className="px-4 py-2 rounded-lg bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors self-start"
+                className="px-4 py-2 rounded-lg bg-blue-700 text-white font-semibold hover:bg-blue-800 transition-colors self-start"
               >
                 ← Dashboard
               </Link>
@@ -103,13 +106,18 @@ export function LeadListContent() {
 
           {/* Search Bar */}
           <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200">
-            <input
-              type="text"
-              placeholder="Search by name, phone, email, or course..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-            />
+            <div className="grid gap-3 md:grid-cols-4">
+              <input
+                type="text"
+                placeholder="Search by name, phone, email, or course..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="md:col-span-2 w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input placeholder="Filter region" value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input placeholder="Filter city" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <input placeholder="Filter course" value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="mt-3 w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           {/* Tabs */}
@@ -123,7 +131,7 @@ export function LeadListContent() {
                 className={`px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition-colors ${
                   activeTab === "ALL"
                     ? "bg-blue-600 text-white"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                 }`}
               >
                 All ({leads.length})
@@ -141,7 +149,7 @@ export function LeadListContent() {
                     className={`px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition-colors ${
                       activeTab === status.value
                         ? "bg-blue-600 text-white"
-                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                     }`}
                   >
                     {status.label} ({count})
@@ -179,7 +187,7 @@ export function LeadListContent() {
                     className={`p-4 rounded-lg border border-slate-200 cursor-pointer transition-all hover:shadow-md ${
                       selectedLead?.id === lead.id
                         ? "bg-blue-50 border-blue-400 shadow-lg"
-                        : "bg-white hover:bg-slate-50"
+                        : "bg-white hover:bg-blue-50"
                     }`}
                   >
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">

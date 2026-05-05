@@ -7,17 +7,17 @@ import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 // @ts-ignore - test files excluded from compilation
-import messagingRouter from '../../../routes/messaging';
+import messagingRouter from '../../routes/messaging';
 // @ts-ignore - test files excluded from compilation
-import { mockPrisma, resetAllMocks } from '../../mocks';
+import { mockPrisma, resetAllMocks } from '../mocks';
 // @ts-ignore - test files excluded from compilation
-import { createMockUser, createMockLead, createMockSMSMessage } from '../../utils/test-helpers';
+import { createMockUser, createMockLead, createMockSMSMessage } from '../utils/test-helpers';
 
-jest.mock('../../../prisma', () => ({
+jest.mock('../../prisma', () => ({
   prisma: mockPrisma
 }));
 
-jest.mock('../../../services/twilio');
+jest.mock('../../services/twilio');
 
 describe('Authentication & Authorization Integration Tests', () => {
   let app: express.Application;

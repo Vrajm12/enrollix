@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "shadcn/tailwind.css";
 @tailwind base;
 @tailwind components;
@@ -6,11 +5,11 @@
 
 /* Root Variables */
 :root {
-  --background: #ffffff;
-  --foreground: #1a1a1a;
-  --border: #e5e7eb;
-  --input: #f9fafb;
-  --ring: #1a1a1a;
+  --background: #f3f8ff;
+  --foreground: #102a52;
+  --border: #cfe0f8;
+  --input: #ffffff;
+  --ring: #1d4ed8;
   --radius: 0.5rem;
   
   /* Status Colors */
@@ -33,8 +32,7 @@
 }
 
 body {
-  @apply bg-gradient-to-br from-slate-50 via-white to-slate-50 text-slate-900 font-sans antialiased;
-  font-family: "Inter", system-ui, sans-serif;
+  @apply bg-[#f3f8ff] text-[#102a52] font-sans antialiased;
 }
 
 html {
@@ -60,7 +58,7 @@ html {
   }
   
   p {
-    @apply text-sm text-gray-700;
+    @apply text-sm text-blue-900/80;
   }
   
   small {
@@ -72,13 +70,12 @@ html {
 input,
 select,
 textarea {
-  @apply rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition-all duration-200;
-  @apply focus:border-gray-400 focus:ring-1 focus:ring-gray-300;
-  font-family: "Inter", system-ui, sans-serif;
+  @apply rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm outline-none transition-all duration-200;
+  @apply focus:border-blue-500 focus:ring-1 focus:ring-blue-300;
 }
 
 input::placeholder {
-  @apply text-gray-400;
+  @apply text-blue-300;
 }
 
 /* Buttons */
@@ -96,7 +93,7 @@ button {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 rounded-full hover:bg-gray-400;
+  @apply bg-blue-200 rounded-full hover:bg-blue-300;
 }
 
 /* Selection */

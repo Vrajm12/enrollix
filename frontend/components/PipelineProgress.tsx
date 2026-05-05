@@ -13,7 +13,7 @@ interface PipelineProgressProps {
 
 export function PipelineProgress({ stages, total }: PipelineProgressProps) {
   return (
-    <div className="bg-gradient-to-br from-slate-900/5 to-slate-900/10 border border-slate-200/30 rounded-2xl p-8 backdrop-blur-xl">
+    <div className="bg-white border border-blue-100 rounded-2xl p-8">
       <div className="mb-8">
         <h2 className="text-lg font-bold text-slate-900">Pipeline Distribution</h2>
         <p className="text-sm text-slate-500 mt-1">Leads across all stages</p>
@@ -21,7 +21,7 @@ export function PipelineProgress({ stages, total }: PipelineProgressProps) {
 
       {/* Horizontal bar */}
       <div className="mb-8">
-        <div className="flex h-10 rounded-lg overflow-hidden border border-slate-200/30 shadow-md">
+        <div className="flex h-10 rounded-lg overflow-hidden border border-blue-100 shadow-sm">
           {stages.map((stage) => (
             <div
               key={stage.name}
@@ -42,7 +42,7 @@ export function PipelineProgress({ stages, total }: PipelineProgressProps) {
       {/* Legend */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {stages.map((stage) => (
-          <div key={stage.name} className="flex items-center gap-3 p-3 rounded-lg bg-slate-100/30 hover:bg-slate-100/50 transition-colors cursor-pointer">
+          <div key={stage.name} className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer">
             <div className={`w-3 h-3 rounded-full ${stage.color}`} />
             <div className="flex-1 min-w-0">
               <p className="text-xs text-slate-600 font-semibold truncate">{stage.name}</p>
@@ -53,7 +53,7 @@ export function PipelineProgress({ stages, total }: PipelineProgressProps) {
       </div>
 
       {/* Summary */}
-      <div className="mt-8 pt-6 border-t border-slate-200/20">
+      <div className="mt-8 pt-6 border-t border-blue-100">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Pipeline Value</p>

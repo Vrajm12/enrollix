@@ -3,15 +3,26 @@ import { User } from "./types";
 const TOKEN_KEY = "education_crm_token";
 const USER_KEY = "education_crm_user";
 
-export const saveSession = (token: string, user: User) => {
+export const saveSession = (token: string | undefined, user: User) => {
   if (typeof window === "undefined") return;
-  localStorage.setItem(TOKEN_KEY, token);
+
+  // Token can be absent when backend uses HttpOnly cookie auth.
+  if (token && token !== "undefined" && token !== "null") {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 };
 
 export const getToken = () => {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token || token === "undefined" || token === "null") {
+    return null;
+  }
+  return token;
 };
 
 export const getUser = (): User | null => {
@@ -29,4 +40,13 @@ export const clearSession = () => {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+};
+
+export const clearStoredToken = () => {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(TOKEN_KEY);
+};
+
+export const hasSession = () => {
+  return Boolean(getToken() || getUser());
 };

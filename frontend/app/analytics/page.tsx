@@ -1,64 +1,99 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { BarChart3, LineChart as LineChartIcon, PieChart as PieChartIcon, Download, Calendar, Loader2, TrendingUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BarChart3, Calendar, Download, Loader2, PieChart as PieChartIcon, TrendingUp } from 'lucide-react';
 import { api } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
+import { getUser } from '@/lib/auth';
 
-interface ReportData {
+type ReportKey = 'funnel' | 'revenue' | 'team' | 'sources' | 'priority';
+
+type FunnelRow = { stage: string; count: number; rate: number };
+type RevenueData = {
+  totalLeads: number;
+  enrolled: { count: number; estimatedRevenue: number };
+  qualified: { count: number; estimatedValue: number };
+  interested: { count: number; estimatedValue: number };
+  totalOpportunity: number;
+  conversionToEnrolled: number;
+  conversionToQualified: number;
+};
+type TeamRow = {
   id: number;
   name: string;
-  description: string;
-  icon: typeof BarChart3;
-  metrics: { label: string; value: string | number }[];
-}
+  email: string;
+  leadsManaged: number;
+  enrolled: number;
+  qualified: number;
+  hotLeads: number;
+  conversionRate: number;
+  engagementScore: number;
+  messages: { whatsapp: number; sms: number };
+};
+type SourceRow = {
+  source: string;
+  total: number;
+  enrolled: number;
+  qualified: number;
+  interested: number;
+  hot: number;
+  warm: number;
+  cold: number;
+  roi: number;
+};
+type PriorityRow = { priority: 'COLD' | 'WARM' | 'HOT'; count: number; enrolled: number };
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
+
+const formatPct = (value: number) => `${value.toFixed(1)}%`;
 
 export default function AnalyticsPage() {
-  const [activeReport, setActiveReport] = useState<'funnel' | 'revenue' | 'team' | 'sources' | 'priority'>('funnel');
+  const [activeReport, setActiveReport] = useState<ReportKey>('funnel');
   const [dateRange, setDateRange] = useState({
     start: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
+    end: new Date().toISOString().split('T')[0],
   });
 
-  const [funnelData2, setFunnelData2] = useState<any[]>([]);
-  const [revenueData2, setRevenueData2] = useState<any>(null);
-  const [teamData2, setTeamData2] = useState<any[]>([]);
-  const [sourceData2, setSourceData2] = useState<any[]>([]);
-  const [priorityData2, setPriorityData2] = useState<any[]>([]);
+  const [funnelData, setFunnelData] = useState<FunnelRow[]>([]);
+  const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
+  const [teamData, setTeamData] = useState<TeamRow[]>([]);
+  const [sourceData, setSourceData] = useState<SourceRow[]>([]);
+  const [priorityData, setPriorityData] = useState<PriorityRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadReports();
+    void loadReports();
   }, [activeReport, dateRange]);
 
   const loadReports = async () => {
     setLoading(true);
     setError(null);
     try {
-      const params = { startDate: dateRange.start + 'T00:00:00.000Z', endDate: dateRange.end + 'T23:59:59.999Z' };
+      const startDate = `${dateRange.start}T00:00:00.000Z`;
+      const endDate = `${dateRange.end}T23:59:59.999Z`;
 
-      switch (activeReport) {
-        case 'funnel':
-          const funnelResp: any = await api.getFunnelReport(params.startDate, params.endDate);
-          setFunnelData2(funnelResp.data || []);
-          break;
-        case 'revenue':
-          const revenueResp: any = await api.getRevenueReport(params.startDate, params.endDate);
-          setRevenueData2(revenueResp.data || null);
-          break;
-        case 'team':
-          const teamResp: any = await api.getTeamPerformanceReport(params.startDate, params.endDate);
-          setTeamData2(teamResp.data || []);
-          break;
-        case 'sources':
-          const sourcesResp: any = await api.getLeadSourcesReport(params.startDate, params.endDate);
-          setSourceData2(sourcesResp.data || []);
-          break;
-        case 'priority':
-          const priorityResp: any = await api.getPriorityDistributionReport(params.startDate, params.endDate);
-          setPriorityData2(priorityResp.data || []);
-          break;
+      if (activeReport === 'funnel') {
+        const resp = await api.getFunnelReport(startDate, endDate) as { data?: FunnelRow[] };
+        setFunnelData(resp.data || []);
+      }
+      if (activeReport === 'revenue') {
+        const resp = await api.getRevenueReport(startDate, endDate) as { data?: RevenueData };
+        setRevenueData(resp.data || null);
+      }
+      if (activeReport === 'team') {
+        const resp = await api.getTeamPerformanceReport(startDate, endDate) as { data?: TeamRow[] };
+        setTeamData(resp.data || []);
+      }
+      if (activeReport === 'sources') {
+        const resp = await api.getLeadSourcesReport(startDate, endDate) as { data?: SourceRow[] };
+        setSourceData(resp.data || []);
+      }
+      if (activeReport === 'priority') {
+        const resp = await api.getPriorityDistributionReport(startDate, endDate) as { data?: PriorityRow[] };
+        setPriorityData(resp.data || []);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load report');
@@ -67,341 +102,319 @@ export default function AnalyticsPage() {
     }
   };
 
-  const handleExportReport = async () => {
-    try {
-      const data = activeReport === 'funnel' ? funnelData2 :
-                   activeReport === 'revenue' ? revenueData2 :
-                   activeReport === 'team' ? teamData2 :
-                   activeReport === 'sources' ? sourceData2 :
-                   priorityData2;
+  const handleExport = async () => {
+    setExporting(true);
+    const data =
+      activeReport === 'funnel'
+        ? funnelData
+        : activeReport === 'revenue'
+          ? revenueData
+          : activeReport === 'team'
+            ? teamData
+            : activeReport === 'sources'
+            ? sourceData
+              : priorityData;
 
-      await api.saveReport(activeReport.toUpperCase(), data, dateRange);
-      alert('Report saved successfully!');
+    try {
+      const xlsx = await import('xlsx/xlsx.mjs');
+      const user = getUser();
+      const reportNames: Record<ReportKey, string> = {
+        funnel: 'Conversion Funnel Report',
+        revenue: 'Revenue Report',
+        team: 'Team Performance Report',
+        sources: 'Lead Sources Report',
+        priority: 'Priority Distribution Report',
+      };
+      const reportName = reportNames[activeReport];
+      const generatedAt = new Date();
+      const tenantName = user?.tenantName ?? `Tenant #${user?.tenantId ?? 'N/A'}`;
+
+      const rows: Array<Array<string | number>> = [
+        ['Guruverse CRM'],
+        [reportName],
+        [],
+        ['Tenant Name', tenantName],
+        ['Tenant ID', user?.tenantId ?? 'N/A'],
+        ['Generated By', user?.name ?? 'Unknown User'],
+        ['User Email', user?.email ?? 'N/A'],
+        ['Date Range', `${dateRange.start} to ${dateRange.end}`],
+        ['Generated At', generatedAt.toLocaleString('en-IN')],
+        [],
+      ];
+
+      if (activeReport === 'funnel') {
+        rows.push(['Stage', 'Count', 'Rate (%)']);
+        (data as FunnelRow[]).forEach((row) => rows.push([row.stage, row.count, row.rate]));
+      } else if (activeReport === 'revenue') {
+        const revenue = data as RevenueData | null;
+        rows.push(['Metric', 'Value']);
+        if (revenue) {
+          rows.push(['Total Leads', revenue.totalLeads]);
+          rows.push(['Enrolled Count', revenue.enrolled.count]);
+          rows.push(['Enrolled Revenue', revenue.enrolled.estimatedRevenue]);
+          rows.push(['Qualified Count', revenue.qualified.count]);
+          rows.push(['Qualified Value', revenue.qualified.estimatedValue]);
+          rows.push(['Interested Count', revenue.interested.count]);
+          rows.push(['Interested Value', revenue.interested.estimatedValue]);
+          rows.push(['Total Opportunity', revenue.totalOpportunity]);
+          rows.push(['Conversion to Enrolled (%)', revenue.conversionToEnrolled]);
+          rows.push(['Conversion to Qualified (%)', revenue.conversionToQualified]);
+        }
+      } else if (activeReport === 'team') {
+        rows.push([
+          'Counselor Name',
+          'Email',
+          'Leads Managed',
+          'Enrolled',
+          'Qualified',
+          'Hot Leads',
+          'Conversion Rate (%)',
+          'Engagement Score',
+          'WhatsApp Messages',
+          'SMS Messages',
+        ]);
+        (data as TeamRow[]).forEach((row) =>
+          rows.push([
+            row.name,
+            row.email,
+            row.leadsManaged,
+            row.enrolled,
+            row.qualified,
+            row.hotLeads,
+            row.conversionRate,
+            row.engagementScore,
+            row.messages?.whatsapp ?? 0,
+            row.messages?.sms ?? 0,
+          ])
+        );
+      } else if (activeReport === 'sources') {
+        rows.push(['Source', 'Total', 'Enrolled', 'Qualified', 'Interested', 'Hot', 'Warm', 'Cold', 'ROI (%)']);
+        (data as SourceRow[]).forEach((row) =>
+          rows.push([row.source, row.total, row.enrolled, row.qualified, row.interested, row.hot, row.warm, row.cold, row.roi])
+        );
+      } else {
+        rows.push(['Priority', 'Leads Count', 'Enrolled']);
+        (data as PriorityRow[]).forEach((row) => rows.push([row.priority, row.count, row.enrolled]));
+      }
+
+      const worksheet = xlsx.utils.aoa_to_sheet(rows);
+      worksheet['!cols'] = [{ wch: 28 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 20 }];
+      worksheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+      ];
+
+      const workbook = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Report');
+      const safeReportName = reportName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const filename = `guruverse-${safeReportName}-${generatedAt.toISOString().slice(0, 10)}.xlsx`;
+      xlsx.writeFile(workbook, filename);
+
+      await api.saveReport(activeReport.toUpperCase(), data, dateRange).catch(() => undefined);
     } catch (err) {
-      alert('Failed to save report: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      setError(err instanceof Error ? err.message : 'Failed to export report');
+    } finally {
+      setExporting(false);
     }
   };
 
-  // Funnel Report Data
-  const funnelData = [
-    { stage: 'Leads Created', count: 450, value: 0 },
-    { stage: 'Contacted', count: 320, value: 0 },
-    { stage: 'Qualified', count: 180, value: 0 },
-    { stage: 'Proposal Sent', count: 95, value: 285000 },
-    { stage: 'Negotiation', count: 42, value: 126000 },
-    { stage: 'Closed', count: 28, value: 84000 },
-  ];
-
-  // Revenue Report Data
-  const revenueData = [
-    { period: 'Week 1', revenue: 15000, target: 20000 },
-    { period: 'Week 2', revenue: 22000, target: 20000 },
-    { period: 'Week 3', revenue: 18500, target: 20000 },
-    { period: 'Week 4', revenue: 26000, target: 20000 },
-    { period: 'Week 5', revenue: 24000, target: 20000 },
-    { period: 'Week 6', revenue: 28000, target: 20000 },
-  ];
-
-  // Team Performance
-  const teamData = [
-    { name: 'Sarah Johnson', leads: 85, closed: 12, conversion: 14.1, revenue: 36000 },
-    { name: 'John Smith', leads: 72, closed: 10, conversion: 13.9, revenue: 30000 },
-    { name: 'Mike Davis', leads: 68, closed: 9, conversion: 13.2, revenue: 27000 },
-    { name: 'Emily Chen', leads: 55, closed: 8, conversion: 14.5, revenue: 24000 },
-    { name: 'Alex Rodriguez', leads: 48, closed: 5, conversion: 10.4, revenue: 15000 },
-  ];
-
-  // Timeline Data (Activity)
-  const timelineEvents = [
-    { date: '2026-03-28', event: 'Record high: 28 deals closed in single day', type: 'milestone' },
-    { date: '2026-03-25', event: 'Sarah Johnson hit $50k monthly target', type: 'achievement' },
-    { date: '2026-03-20', event: 'Conversion rate improved by 2.3%', type: 'improvement' },
-    { date: '2026-03-15', event: 'New campaign generated 120 leads', type: 'campaign' },
-    { date: '2026-03-10', event: 'Team collaboration improved, lead cycle reduced by 5 days', type: 'improvement' },
-  ];
-
-  const reports = [
-    {
-      id: 'funnel',
-      name: 'Conversion Funnel',
-      description: 'See how leads move through your sales pipeline',
-      icon: PieChartIcon,
-    },
-    {
-      id: 'revenue',
-      name: 'Revenue Trends',
-      description: 'Track revenue vs targets over time',
-      icon: LineChartIcon,
-    },
-    {
-      id: 'team',
-      name: 'Team Performance',
-      description: 'Compare team member metrics and KPIs',
-      icon: BarChart3,
-    },
-    {
-      id: 'sources',
-      name: 'Lead Sources',
-      description: 'Analyze which channels bring the best leads',
-      icon: TrendingUp,
-    },
-    {
-      id: 'priority',
-      name: 'Priority Distribution',
-      description: 'See breakdown of hot, warm, and cold leads',
-      icon: Calendar,
-    },
+  const tabs: Array<{ id: ReportKey; name: string; desc: string; icon: any }> = [
+    { id: 'funnel', name: 'Conversion Funnel', desc: 'Pipeline movement', icon: PieChartIcon },
+    { id: 'revenue', name: 'Revenue', desc: 'Revenue opportunities', icon: TrendingUp },
+    { id: 'team', name: 'Team', desc: 'Counselor performance', icon: BarChart3 },
+    { id: 'sources', name: 'Sources', desc: 'Lead source quality', icon: TrendingUp },
+    { id: 'priority', name: 'Priority', desc: 'Hot/warm/cold split', icon: Calendar },
   ];
 
   return (
-    <div className="flex bg-gradient-to-br from-slate-50 via-white to-slate-100 min-h-screen">
+    <div className="flex bg-[#f3f8ff] min-h-screen">
       <Sidebar />
-
-      <main className="flex-1 md:ml-60 flex flex-col">
-        <div className="flex-1 overflow-auto py-8 md:py-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-slate-900">Analytics & Reports</h1>
-              <p className="text-slate-600 mt-2">In-depth insights into your sales performance</p>
-            </div>
-
-            {/* Date Range Selector */}
-            <div className="bg-white border border-slate-200/50 rounded-2xl p-4 mb-8 flex gap-4 items-end flex-wrap">
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">Start Date</label>
-                <input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                  className="px-4 py-2 border border-slate-200/50 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-900 mb-2">End Date</label>
-                <input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                  className="px-4 py-2 border border-slate-200/50 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <button className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                Apply Filter
-              </button>
-              <button
-                onClick={handleExportReport}
-                className="px-6 py-2 border border-slate-200/50 text-slate-600 rounded-lg font-medium hover:bg-slate-50 transition-colors ml-auto flex items-center gap-2"
-              >
-                <Download size={18} />
-                Export Report
-              </button>
-            </div>
-
-            {/* Report Type Selection */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-              {reports.map((report: any) => {
-                const Icon = report.icon;
-                return (
-                  <button
-                    key={report.id}
-                    onClick={() => setActiveReport(report.id as typeof activeReport)}
-                    className={`p-4 rounded-2xl border-2 transition-all text-left ${
-                      activeReport === report.id
-                        ? 'border-blue-600 bg-blue-50'
-                        : 'border-slate-200/50 bg-white hover:border-blue-300'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 ${activeReport === report.id ? 'bg-blue-200' : 'bg-slate-100'} rounded-lg flex items-center justify-center mb-2`}>
-                      <Icon size={20} className={activeReport === report.id ? 'text-blue-600' : 'text-slate-600'} />
-                    </div>
-                    <p className="font-bold text-slate-900 text-sm">{report.name}</p>
-                    <p className="text-xs text-slate-600 mt-1">{report.description}</p>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Loading State */}
-            {loading && (
-              <div className="flex justify-center items-center py-12">
-                <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-              </div>
-            )}
-
-            {/* Error State */}
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-8 text-red-700">
-                {error}
-              </div>
-            )}
-
-            {/* Conversion Funnel Report */}
-            {!loading && !error && activeReport === 'funnel' && funnelData2.length > 0 && (
-              <div className="space-y-8">
-                <div className="bg-white border border-slate-200/50 rounded-2xl p-8">
-                  <h2 className="text-2xl font-bold text-slate-900 mb-8">Lead Conversion Funnel</h2>
-
-                  <div className="space-y-6">
-                    {funnelData2.map((stage: any, idx: number) => {
-                      const maxWidth = 100;
-                      const width = stage.rate || 0;
-
-                      return (
-                        <div key={stage.stage}>
-                          <div className="flex justify-between items-end mb-2">
-                            <div>
-                              <p className="font-bold text-slate-900">{stage.stage}</p>
-                              <p className="text-sm text-slate-600">{stage.count} leads</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-slate-600">{width.toFixed(1)}% of total</p>
-                            </div>
-                          </div>
-                          <div className="w-full bg-slate-100 rounded-full h-12 overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full flex items-center justify-end pr-4"
-                              style={{ width: `${width}%` }}
-                            >
-                              {width > 10 && <span className="text-white text-sm font-bold">{width.toFixed(0)}%</span>}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Key Metrics */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-12 pt-8 border-t border-slate-200/50">
-                    <div className="bg-blue-50 rounded-xl p-4">
-                      <p className="text-sm text-slate-600 mb-1">Total Leads</p>
-                      <p className="text-3xl font-bold text-blue-600">{funnelData2[0]?.count || 0}</p>
-                    </div>
-                    <div className="bg-green-50 rounded-xl p-4">
-                      <p className="text-sm text-slate-600 mb-1">Final Stage</p>
-                      <p className="text-3xl font-bold text-green-600">{funnelData2[funnelData2.length - 1]?.count || 0}</p>
-                    </div>
-                    <div className="bg-purple-50 rounded-xl p-4">
-                      <p className="text-sm text-slate-600 mb-1">Conversion Rate</p>
-                      <p className="text-3xl font-bold text-purple-600">
-                        {funnelData2[0] && funnelData2[funnelData2.length - 1]
-                          ? ((funnelData2[funnelData2.length - 1].count / funnelData2[0].count) * 100).toFixed(1)
-                          : '0'}%
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Revenue Report */}
-            {!loading && !error && activeReport === 'revenue' && revenueData2 && (
-              <div className="space-y-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                  <div className="bg-white rounded-lg p-6 border border-slate-200">
-                    <p className="text-slate-600 text-sm mb-2">Total Leads</p>
-                    <p className="text-3xl font-bold text-slate-900">{revenueData2.totalLeads}</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-6 border border-slate-200">
-                    <p className="text-slate-600 text-sm mb-2">Enrolled</p>
-                    <p className="text-3xl font-bold text-green-600">{revenueData2.enrolled.count}</p>
-                    <p className="text-sm text-slate-600 mt-1">₹{(revenueData2.enrolled.estimatedRevenue / 100000).toFixed(1)}L</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-6 border border-slate-200">
-                    <p className="text-slate-600 text-sm mb-2">Qualified</p>
-                    <p className="text-3xl font-bold text-blue-600">{revenueData2.qualified.count}</p>
-                    <p className="text-sm text-slate-600 mt-1">₹{(revenueData2.qualified.estimatedValue / 100000).toFixed(1)}L</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-6 border border-slate-200">
-                    <p className="text-slate-600 text-sm mb-2">Total Opportunity</p>
-                    <p className="text-3xl font-bold text-purple-600">₹{(revenueData2.totalOpportunity / 100000).toFixed(1)}L</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Team Performance Report */}
-            {!loading && !error && activeReport === 'team' && teamData2.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200/50 overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Team Member</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Leads</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Enrolled</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Hot Leads</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Conversion</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-slate-900">Engagement</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {teamData2.map((member: any) => (
-                      <tr key={member.id} className="hover:bg-slate-50">
-                        <td className="px-6 py-4 text-slate-900 font-medium">{member.name}</td>
-                        <td className="px-6 py-4 text-slate-600">{member.leadsManaged}</td>
-                        <td className="px-6 py-4 text-green-600 font-semibold">{member.enrolled}</td>
-                        <td className="px-6 py-4 text-orange-600 font-semibold">{member.hotLeads}</td>
-                        <td className="px-6 py-4 text-blue-600">{member.conversionRate.toFixed(1)}%</td>
-                        <td className="px-6 py-4 text-slate-600">{member.engagementScore} msgs</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Lead Sources Report */}
-            {!loading && !error && activeReport === 'sources' && sourceData2.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {sourceData2.map((source: any, idx: number) => (
-                  <div key={idx} className="bg-white rounded-lg p-6 border border-slate-200">
-                    <h3 className="text-lg font-bold text-slate-900 mb-4">{source.source}</h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Total Leads:</span>
-                        <span className="font-semibold text-slate-900">{source.total}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Enrolled:</span>
-                        <span className="font-semibold text-green-600">{source.enrolled}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">Qualified:</span>
-                        <span className="font-semibold text-blue-600">{source.qualified}</span>
-                      </div>
-                      <div className="flex justify-between pt-3 border-t border-slate-200">
-                        <span className="text-slate-600">ROI:</span>
-                        <span className="font-bold text-purple-600">{source.roi.toFixed(1)}%</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Priority Distribution Report */}
-            {!loading && !error && activeReport === 'priority' && priorityData2.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {priorityData2.map((priority: any) => (
-                  <div key={priority.priority} className="bg-white rounded-lg p-6 border border-slate-200">
-                    <h3 className="text-lg font-bold mb-4">
-                      <span className={`inline-block w-4 h-4 rounded-full mr-2 ${
-                        priority.priority === 'HOT' ? 'bg-red-500' :
-                        priority.priority === 'WARM' ? 'bg-orange-500' :
-                        'bg-blue-500'
-                      }`} />
-                      {priority.priority} Leads
-                    </h3>
-                    <p className="text-3xl font-bold text-slate-900 mb-2">{priority.count}</p>
-                    <p className="text-sm text-slate-600">Enrolled: <span className="font-semibold text-slate-900">{priority.enrolled}</span></p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Events Timeline - Disabled */}
-            {/* Disabled Timeline Report - Not used in current report types */}
+      <main className="flex-1 md:ml-60 py-8 md:py-10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-slate-900">Analytics & Reports</h1>
+            <p className="mt-2 text-slate-600">Blue-white reporting workspace with live backend data.</p>
           </div>
+
+          <div className="mb-8 flex flex-wrap items-end gap-4 rounded-2xl border border-blue-100 bg-white p-4">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-900">Start Date</label>
+              <input type="date" value={dateRange.start} onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })} className="rounded-lg border border-blue-200 px-4 py-2" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-900">End Date</label>
+              <input type="date" value={dateRange.end} onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })} className="rounded-lg border border-blue-200 px-4 py-2" />
+            </div>
+            <button onClick={handleExport} disabled={exporting} className="ml-auto inline-flex items-center gap-2 rounded-lg border border-blue-200 px-6 py-2 font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60">
+              <Download size={18} /> {exporting ? 'Preparing Excel...' : 'Export Report'}
+            </button>
+          </div>
+
+          <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeReport === tab.id;
+              return (
+                <button key={tab.id} onClick={() => setActiveReport(tab.id)} className={`rounded-2xl border-2 p-4 text-left ${active ? 'border-blue-600 bg-blue-50' : 'border-blue-100 bg-white hover:border-blue-300'}`}>
+                  <div className={`mb-2 flex h-10 w-10 items-center justify-center rounded-lg ${active ? 'bg-blue-200' : 'bg-blue-50'}`}>
+                    <Icon size={20} className={active ? 'text-blue-700' : 'text-blue-500'} />
+                  </div>
+                  <p className="text-sm font-bold text-slate-900">{tab.name}</p>
+                  <p className="mt-1 text-xs text-slate-600">{tab.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {loading ? (
+            <div className="flex items-center justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-blue-600" /></div>
+          ) : error ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>
+          ) : (
+            <div className="rounded-2xl border border-blue-100 bg-white p-6">
+              {activeReport === 'funnel' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-600">Total stages</p>
+                      <p className="mt-1 text-2xl font-bold text-slate-900">{funnelData.length}</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-600">Top stage count</p>
+                      <p className="mt-1 text-2xl font-bold text-slate-900">{funnelData[0]?.count ?? 0}</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-600">Final conversion</p>
+                      <p className="mt-1 text-2xl font-bold text-slate-900">{formatPct(funnelData[funnelData.length - 1]?.rate ?? 0)}</p>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-blue-100 text-left text-slate-500">
+                          <th className="py-2 pr-3">Stage</th>
+                          <th className="py-2 pr-3">Count</th>
+                          <th className="py-2">Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {funnelData.map((row) => (
+                          <tr key={row.stage} className="border-b border-blue-50">
+                            <td className="py-2 pr-3 font-medium text-slate-900">{row.stage}</td>
+                            <td className="py-2 pr-3 text-slate-700">{row.count}</td>
+                            <td className="py-2 text-slate-700">{formatPct(row.rate)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {activeReport === 'revenue' && revenueData && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-600">Total leads</p>
+                      <p className="mt-1 text-2xl font-bold text-slate-900">{revenueData.totalLeads}</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-600">Opportunity</p>
+                      <p className="mt-1 text-2xl font-bold text-slate-900">{formatCurrency(revenueData.totalOpportunity)}</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                      <p className="text-xs uppercase tracking-wide text-slate-600">Enrolled conversion</p>
+                      <p className="mt-1 text-2xl font-bold text-slate-900">{formatPct(revenueData.conversionToEnrolled)}</p>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-blue-100 text-left text-slate-500">
+                          <th className="py-2 pr-3">Bucket</th>
+                          <th className="py-2 pr-3">Count</th>
+                          <th className="py-2">Estimated Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="border-b border-blue-50"><td className="py-2 pr-3 font-medium">Enrolled</td><td>{revenueData.enrolled.count}</td><td>{formatCurrency(revenueData.enrolled.estimatedRevenue)}</td></tr>
+                        <tr className="border-b border-blue-50"><td className="py-2 pr-3 font-medium">Qualified</td><td>{revenueData.qualified.count}</td><td>{formatCurrency(revenueData.qualified.estimatedValue)}</td></tr>
+                        <tr><td className="py-2 pr-3 font-medium">Interested</td><td>{revenueData.interested.count}</td><td>{formatCurrency(revenueData.interested.estimatedValue)}</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {activeReport === 'team' && (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-blue-100 text-left text-slate-500">
+                        <th className="py-2 pr-3">Counselor</th><th className="py-2 pr-3">Leads</th><th className="py-2 pr-3">Enrolled</th><th className="py-2 pr-3">Qualified</th><th className="py-2 pr-3">Conversion</th><th className="py-2">Engagement</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamData.map((row) => (
+                        <tr key={row.id} className="border-b border-blue-50">
+                          <td className="py-2 pr-3"><p className="font-medium text-slate-900">{row.name}</p><p className="text-xs text-slate-500">{row.email}</p></td>
+                          <td className="py-2 pr-3">{row.leadsManaged}</td>
+                          <td className="py-2 pr-3">{row.enrolled}</td>
+                          <td className="py-2 pr-3">{row.qualified}</td>
+                          <td className="py-2 pr-3">{formatPct(row.conversionRate)}</td>
+                          <td className="py-2">{row.engagementScore}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeReport === 'sources' && (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-blue-100 text-left text-slate-500">
+                        <th className="py-2 pr-3">Source</th><th className="py-2 pr-3">Total</th><th className="py-2 pr-3">Enrolled</th><th className="py-2 pr-3">Qualified</th><th className="py-2">ROI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sourceData.map((row) => (
+                        <tr key={row.source} className="border-b border-blue-50">
+                          <td className="py-2 pr-3 font-medium text-slate-900">{row.source}</td>
+                          <td className="py-2 pr-3">{row.total}</td>
+                          <td className="py-2 pr-3">{row.enrolled}</td>
+                          <td className="py-2 pr-3">{row.qualified}</td>
+                          <td className="py-2">{formatPct(row.roi)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeReport === 'priority' && (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-blue-100 text-left text-slate-500">
+                        <th className="py-2 pr-3">Priority</th><th className="py-2 pr-3">Leads</th><th className="py-2">Enrolled</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {priorityData.map((row) => (
+                        <tr key={row.priority} className="border-b border-blue-50">
+                          <td className="py-2 pr-3 font-medium text-slate-900">{row.priority}</td>
+                          <td className="py-2 pr-3">{row.count}</td>
+                          <td className="py-2">{row.enrolled}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
     </div>
