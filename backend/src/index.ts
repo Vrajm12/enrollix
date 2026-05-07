@@ -50,6 +50,14 @@ const authLimiter = rateLimit({
   message: "Too many login attempts, please try again later",
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => {
+    const email =
+      typeof req.body?.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : "unknown";
+    return `${req.ip}:${email}`;
+  },
   skip: (req) => {
     // Don't rate limit health checks and info endpoints
     return req.path === "/health" || req.path === "/api/info";
