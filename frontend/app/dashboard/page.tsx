@@ -12,7 +12,7 @@ import { ActivityTimeline } from "@/components/ActivityTimeline";
 import { PipelineProgress } from "@/components/PipelineProgress";
 import { ApiError, api } from "@/lib/api";
 import { clearSession, getToken, getUser } from "@/lib/auth";
-import { Lead, LeadStatus, Priority, User } from "@/lib/types";
+import { Activity, Lead, LeadStatus, Priority, User } from "@/lib/types";
 import { Users, TrendingUp, Target, Zap } from "lucide-react";
 
 type Counselor = {
@@ -22,6 +22,8 @@ type Counselor = {
   role: "TENANT_ADMIN" | "ADMIN" | "COUNSELOR";
 };
 
+type TimelineActivityType = "call" | "whatsapp" | "email" | "note" | "status";
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -29,6 +31,7 @@ export default function DashboardPage() {
   const [todayFollowups, setTodayFollowups] = useState<Lead[]>([]);
   const [missedFollowups, setMissedFollowups] = useState<Lead[]>([]);
   const [counselors, setCounselors] = useState<Counselor[]>([]);
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,16 +43,18 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      const [leadList, todayList, missedList, counselorList] = await Promise.all([
+      const [leadList, todayList, missedList, counselorList, activities] = await Promise.all([
         api.getLeads(),
         api.getTodayFollowups(),
         api.getMissedFollowups(),
         api.getCounselors(),
+        api.getRecentActivities(),
       ]);
       setLeads(leadList);
       setTodayFollowups(todayList);
       setMissedFollowups(missedList);
       setCounselors(counselorList);
+      setRecentActivities(activities);
       setError(null);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -146,6 +151,13 @@ export default function DashboardPage() {
     }
   };
 
+  const mapTimelineType = (type: Activity["type"]): TimelineActivityType => {
+    if (type === "CALL") return "call";
+    if (type === "WHATSAPP") return "whatsapp";
+    if (type === "EMAIL") return "email";
+    return "note";
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
@@ -177,7 +189,7 @@ export default function DashboardPage() {
               {/* Header */}
               <div className="mb-12">
                 <h1 className="text-3xl font-bold text-slate-900 md:text-4xl">Dashboard</h1>
-                <p className="text-slate-600 mt-2">Welcome back! Here's your sales overview.</p>
+                <p className="text-slate-600 mt-2">Welcome Back! {user?.name ?? "User"}</p>
               </div>
 
               {/* Error Alert */}
@@ -200,7 +212,11 @@ export default function DashboardPage() {
                 />
                 <ModernKPICard
                   title="Conversion Rate"
-                  value={(leads.filter(l => l.status === "ENROLLED").length / leads.length * 100).toFixed(1) + '%'}
+                  value={
+                    leads.length > 0
+                      ? ((leads.filter((l) => l.status === "ENROLLED").length / leads.length) * 100).toFixed(1) + "%"
+                      : "0.0%"
+                  }
                   trend={5}
                   icon={<TrendingUp size={24} />}
                   color="green"
@@ -232,7 +248,7 @@ export default function DashboardPage() {
                     stages={[
                       { name: 'Lead', count: leads.filter(l => l.status === 'LEAD').length, color: 'bg-blue-500' },
                       { name: 'Contacted', count: leads.filter(l => l.status === 'CONTACTED').length, color: 'bg-blue-400' },
-                      { name: 'Interested', count: leads.filter(l => l.status === 'INTERESTED').length || Math.floor(leads.length * 0.5), color: 'bg-cyan-400' },
+                      { name: 'Interested', count: leads.filter(l => l.status === 'INTERESTED').length, color: 'bg-cyan-400' },
                       { name: 'Qualified', count: leads.filter(l => l.status === 'QUALIFIED').length, color: 'bg-teal-400' },
                       { name: 'Enrolled', count: leads.filter(l => l.status === 'ENROLLED').length, color: 'bg-green-500' },
                     ]}
@@ -258,56 +274,24 @@ export default function DashboardPage() {
                 {/* Recent Activity Timeline - Takes 2 columns */}
                 <div className="lg:col-span-2">
                   <ActivityTimeline
-                    activities={[
-                      {
-                        id: 1,
-                        type: 'call',
-                        title: 'Call with prospect',
-                        description: 'Discussed course curriculum',
-                        timestamp: '2 hours ago',
-                        leadName: 'John Doe',
-                      },
-                      {
-                        id: 2,
-                        type: 'whatsapp',
-                        title: 'WhatsApp message',
-                        description: 'Sent prospectus document',
-                        timestamp: '4 hours ago',
-                        leadName: 'Sarah Smith',
-                      },
-                      {
-                        id: 3,
-                        type: 'email',
-                        title: 'Email sent',
-                        description: 'Follow-up email',
-                        timestamp: '6 hours ago',
-                        leadName: 'Mike Johnson',
-                      },
-                      {
-                        id: 4,
-                        type: 'status',
-                        title: 'Lead qualified',
-                        description: 'Moved to qualified stage',
-                        timestamp: '8 hours ago',
-                        leadName: 'Emma Wilson',
-                      },
-                      {
-                        id: 5,
-                        type: 'note',
-                        title: 'Added note',
-                        description: 'Follow up next week',
-                        timestamp: '1 day ago',
-                        leadName: 'Alex Brown',
-                      },
-                      {
-                        id: 6,
-                        type: 'whatsapp',
-                        title: 'WhatsApp sent',
-                        description: 'Shared admission link',
-                        timestamp: '1 day ago',
-                        leadName: 'Lisa Garcia',
-                      },
-                    ]}
+                    activities={recentActivities.map((activity) => ({
+                      id: activity.id,
+                      type: mapTimelineType(activity.type),
+                      title:
+                        activity.type === "CALL"
+                          ? "Call logged"
+                          : activity.type === "WHATSAPP"
+                          ? "WhatsApp activity"
+                          : activity.type === "EMAIL"
+                          ? "Email activity"
+                          : "Note added",
+                      description: activity.notes,
+                      timestamp: new Date(activity.createdAt).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }),
+                      leadName: activity.lead?.name ?? "Lead",
+                    }))}
                   />
                 </div>
 
@@ -331,7 +315,7 @@ export default function DashboardPage() {
                         <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden">
                           <div
                             className={`h-full ${priority.bar} transition-all duration-300`}
-                            style={{ width: `${(priority.count / leads.length) * 100}%` }}
+                            style={{ width: `${(priority.count / (leads.length > 0 ? leads.length : 1)) * 100}%` }}
                           />
                         </div>
                       </div>

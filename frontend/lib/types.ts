@@ -47,9 +47,14 @@ export interface Lead {
 
 export interface Activity {
   id: number;
+  tenantId?: number;
   leadId: number;
   type: ActivityType;
   notes: string;
   createdAt: string;
   nextFollowUp: string;
+  lead?: {
+    id: number;
+    name: string;
+  };
 }

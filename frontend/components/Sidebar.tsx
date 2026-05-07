@@ -130,7 +130,7 @@ export default function Sidebar() {
             </div>
             <div>
               <h1 className="font-bold text-lg tracking-tight">Guruverse</h1>
-              <p className="text-xs text-blue-200 font-medium">Guruverse CRM</p>
+              <p className="text-[10px] text-blue-200/90">A Product by Guru Branding Services</p>
             </div>
           </Link>
         </div>

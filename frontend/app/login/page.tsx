@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { CheckCircle2, Lock, Mail, ShieldCheck, Users } from "lucide-react";
 import { ApiError, api } from "@/lib/api";
 import { clearSession, getToken, getUser, saveSession } from "@/lib/auth";
@@ -54,16 +55,27 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.45 }}
-            className="flex items-center gap-3"
+            className="flex flex-col items-start"
           >
-            <span className="text-xl font-semibold tracking-wide">Guruverse CRM</span>
+            <div>
+              <Image
+                src="/GBS - UGM.png"
+                alt="Guru Branding Services logo"
+                width={360}
+                height={114}
+                priority
+                className="h-auto w-[260px] sm:w-[320px]"
+              />
+            </div>
+            <span className="text-3xl font-semibold tracking-wide mt-4">Guruverse CRM</span>
+            <p className="text-base text-blue-100 mt-1">A Product by Guru Branding Services</p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="mt-10 lg:mt-0"
+            className="mt-4 lg:mt-0"
           >
             <h1 className="text-3xl font-semibold leading-tight lg:text-4xl">Admissions pipeline, simplified for high-performing teams.</h1>
             <p className="mt-4 max-w-md text-sm text-blue-100 lg:text-base">
@@ -148,7 +160,7 @@ export default function LoginPage() {
 
             <div className="mt-3 text-center text-[11px] uppercase tracking-wide text-slate-500">
               <p>GURUVERSE CRM PLATFORM</p>
-              <p className="mt-1 normal-case">secure multi-tenant admissions workspace.</p>
+              <p className="mt-1 normal-case">A Product by Guru Branding Services.</p>
             </div>
           </motion.div>
         </section>

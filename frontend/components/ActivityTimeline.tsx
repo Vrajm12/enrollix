@@ -32,6 +32,9 @@ export function ActivityTimeline({ activities }: ActivityTimelineProps) {
       </div>
 
       <div className="space-y-6">
+        {activities.length === 0 && (
+          <p className="text-sm text-slate-500">No recent activities found.</p>
+        )}
         {activities.slice(0, 6).map((activity, index) => {
           const { icon: Icon, color } = iconMap[activity.type];
 

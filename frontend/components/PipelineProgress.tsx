@@ -12,6 +12,10 @@ interface PipelineProgressProps {
 }
 
 export function PipelineProgress({ stages, total }: PipelineProgressProps) {
+  const safeTotal = total > 0 ? total : 1;
+  const pipelineValue = total * 15000;
+  const averageDealSize = 15000;
+
   return (
     <div className="bg-white border border-blue-100 rounded-2xl p-8">
       <div className="mb-8">
@@ -26,12 +30,12 @@ export function PipelineProgress({ stages, total }: PipelineProgressProps) {
             <div
               key={stage.name}
               className={`${stage.color} flex items-center justify-center border-r border-white/20 last:border-r-0 hover:opacity-80 transition-opacity cursor-pointer group relative`}
-              style={{ width: `${(stage.count / total) * 100}%` }}
+              style={{ width: `${(stage.count / safeTotal) * 100}%` }}
               title={`${stage.name}: ${stage.count}`}
             >
-              {(stage.count / total) * 100 > 10 && (
+              {(stage.count / safeTotal) * 100 > 10 && (
                 <span className="text-xs font-bold text-white opacity-75 group-hover:opacity-100">
-                  {((stage.count / total) * 100).toFixed(0)}%
+                  {((stage.count / safeTotal) * 100).toFixed(0)}%
                 </span>
               )}
             </div>
@@ -58,13 +62,13 @@ export function PipelineProgress({ stages, total }: PipelineProgressProps) {
           <div>
             <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Pipeline Value</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">
-              ${(total * 15000).toLocaleString()}
+              {pipelineValue.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 })}
             </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Average Deal Size</p>
             <p className="text-2xl font-bold text-slate-900 mt-1">
-              ${(15000).toLocaleString()}
+              {averageDealSize.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 })}
             </p>
           </div>
         </div>

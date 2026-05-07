@@ -13,7 +13,7 @@ interface LeadFunnelProps {
 }
 
 export function LeadFunnel({ stages }: LeadFunnelProps) {
-  const maxCount = Math.max(...stages.map((s) => s.count));
+  const maxCount = Math.max(...stages.map((s) => s.count), 1);
 
   return (
     <div className="bg-white border border-blue-100 rounded-2xl p-8">
@@ -25,7 +25,8 @@ export function LeadFunnel({ stages }: LeadFunnelProps) {
       <div className="space-y-6">
         {stages.map((stage, index) => {
           const width = (stage.count / maxCount) * 100;
-          const conversionRate = index > 0 ? ((stage.count / stages[index - 1].count) * 100).toFixed(1) : 100;
+          const previousCount = stages[index - 1]?.count ?? 0;
+          const conversionRate = index > 0 ? (previousCount > 0 ? ((stage.count / previousCount) * 100).toFixed(1) : "0.0") : "100.0";
 
           return (
             <div key={stage.name} className="group cursor-pointer">
@@ -69,7 +70,9 @@ export function LeadFunnel({ stages }: LeadFunnelProps) {
           <p className="text-2xl font-bold text-green-600">
             {stages.length > 1
               ? (
-                  ((stages[stages.length - 1].count / stages[0].count) * 100).toFixed(1) + '%'
+                  (stages[0].count > 0
+                    ? ((stages[stages.length - 1].count / stages[0].count) * 100).toFixed(1)
+                    : "0.0") + '%'
                 )
               : '-'}
           </p>

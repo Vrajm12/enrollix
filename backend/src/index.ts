@@ -20,6 +20,20 @@ const app = express();
 
 const allowedOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim());
 const allowSubdomainOrigins = env.ALLOW_SUBDOMAIN_ORIGINS;
+const isDevelopment = (process.env.NODE_ENV ?? "development") !== "production";
+
+const normalizeOrigin = (origin: string) => origin.trim().replace(/\/$/, "");
+const normalizedAllowedOrigins = allowedOrigins.map(normalizeOrigin);
+
+const isLocalDevOrigin = (origin: string) => {
+  try {
+    const url = new URL(origin);
+    return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
 const isAllowedSubdomainOrigin = (origin: string) => {
   try {
     const { hostname } = new URL(origin);
@@ -74,7 +88,9 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      const normalizedOrigin = normalizeOrigin(origin);
+      if (normalizedAllowedOrigins.includes(normalizedOrigin)) return callback(null, true);
+      if (isDevelopment && isLocalDevOrigin(origin)) return callback(null, true);
       if (allowSubdomainOrigins && isAllowedSubdomainOrigin(origin)) {
         return callback(null, true);
       }

@@ -174,4 +174,34 @@ router.get(
   })
 );
 
+// Get recent activities for dashboard timeline
+router.get(
+  "/activities/recent",
+  asyncHandler(async (req, res) => {
+    const activityWhere =
+      req.user?.role !== Role.TENANT_ADMIN && req.user?.role !== Role.SUPER_ADMIN
+        ? {
+            tenantId: req.user!.tenantId,
+            lead: { assignedTo: req.user!.id }
+          }
+        : { tenantId: req.user!.tenantId };
+
+    const activities = await prisma.activity.findMany({
+      where: activityWhere,
+      include: {
+        lead: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10
+    });
+
+    return res.json(activities);
+  })
+);
+
 export default router;

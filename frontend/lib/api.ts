@@ -97,6 +97,7 @@ export const api = {
   getTodayFollowups: () => request<Lead[]>("/dashboard/followups/today"),
   getMissedFollowups: () => request<Lead[]>("/dashboard/followups/missed"),
   getLeadsByStatus: () => request<Record<string, Lead[]>>("/dashboard/leads/by-status"),
+  getRecentActivities: () => request<Activity[]>("/dashboard/activities/recent"),
 
   // Leads
   getLeads: (filters?: { region?: string; city?: string; course?: string }) => {
