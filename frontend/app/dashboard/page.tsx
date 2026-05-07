@@ -48,7 +48,7 @@ export default function DashboardPage() {
         api.getTodayFollowups(),
         api.getMissedFollowups(),
         api.getCounselors(),
-        api.getRecentActivities(),
+        api.getRecentActivities().catch(() => []),
       ]);
       setLeads(leadList);
       setTodayFollowups(todayList);
