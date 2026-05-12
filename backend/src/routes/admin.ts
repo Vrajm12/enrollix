@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../middleware/auth.js";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { isMissingApiRequestLogTableError } from "../utils/prismaErrors.js";
 
 const router = Router();
 const courseOptionsSchema = z.array(z.string().trim().min(1).max(100)).max(200);
@@ -35,6 +36,12 @@ const createTenantUserSchema = z.object({
 const updateTenantUserSchema = z.object({
   role: z.enum(["COUNSELOR", "ADMIN", "TENANT_ADMIN"]).optional(),
   name: z.string().min(1).optional()
+});
+const monitoringQuerySchema = z.object({
+  hours: z.coerce.number().int().min(1).max(24 * 30).optional().default(24),
+  limit: z.coerce.number().int().min(1).max(500).optional().default(100),
+  tenantId: z.coerce.number().int().min(1).optional(),
+  status: z.coerce.number().int().min(100).max(599).optional()
 });
 
 // Only SUPER_ADMIN can access these routes
@@ -289,6 +296,33 @@ router.post(
 );
 
 /**
+ * DELETE /admin/tenants/:id/permanent
+ * Permanently delete a tenant and all related records
+ */
+router.delete(
+  "/tenants/:id/permanent",
+  ...adminAuth,
+  asyncHandler(async (req, res) => {
+    const tenantId = parseInt(req.params.id, 10);
+
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId }
+    });
+    if (!tenant) {
+      return res.status(404).json({ message: "Tenant not found" });
+    }
+
+    await prisma.tenant.delete({
+      where: { id: tenantId }
+    });
+
+    return res.json({
+      message: "Tenant deleted permanently"
+    });
+  })
+);
+
+/**
  * GET /admin/tenants/:id/users
  * List users for a tenant (SUPER_ADMIN only)
  */
@@ -396,6 +430,160 @@ router.delete(
 
     return res.json({
       message: "User deleted successfully"
+    });
+  })
+);
+
+/**
+ * GET /admin/monitoring/overview
+ * High-level usage and health metrics for superadmin
+ */
+router.get(
+  "/monitoring/overview",
+  ...adminAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = monitoringQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid monitoring query params" });
+    }
+    const { hours } = parsed.data;
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    try {
+      const [totalRequests, totalErrors, avgDurationData, mostUsedTenants, topEndpoints, latestErrors] =
+        await Promise.all([
+          prisma.apiRequestLog.count({ where: { createdAt: { gte: since } } }),
+          prisma.apiRequestLog.count({
+            where: { createdAt: { gte: since }, statusCode: { gte: 400 } }
+          }),
+          prisma.apiRequestLog.aggregate({
+            where: { createdAt: { gte: since } },
+            _avg: { durationMs: true }
+          }),
+          prisma.apiRequestLog.groupBy({
+            by: ["tenantId"],
+            where: { createdAt: { gte: since }, tenantId: { not: null } },
+            _count: { id: true },
+            orderBy: { _count: { id: "desc" } },
+            take: 10
+          }),
+          prisma.apiRequestLog.groupBy({
+            by: ["path"],
+            where: { createdAt: { gte: since } },
+            _count: { id: true },
+            _avg: { durationMs: true },
+            orderBy: { _count: { id: "desc" } },
+            take: 10
+          }),
+          prisma.apiRequestLog.findMany({
+            where: { createdAt: { gte: since }, statusCode: { gte: 400 } },
+            orderBy: { createdAt: "desc" },
+            take: 30
+          })
+        ]);
+
+      const tenantIds = mostUsedTenants
+        .map((item) => item.tenantId)
+        .filter((tenantId): tenantId is number => tenantId !== null);
+      const tenants = tenantIds.length
+        ? await prisma.tenant.findMany({
+            where: { id: { in: tenantIds } },
+            select: { id: true, name: true, slug: true, isActive: true }
+          })
+        : [];
+      const tenantMap = new Map(tenants.map((tenant) => [tenant.id, tenant]));
+
+      return res.json({
+        overview: {
+          windowHours: hours,
+          totalRequests,
+          totalErrors,
+          errorRatePercent: totalRequests ? Number(((totalErrors / totalRequests) * 100).toFixed(2)) : 0,
+          avgDurationMs: Number((avgDurationData._avg.durationMs ?? 0).toFixed(1))
+        },
+        mostUsedTenants: mostUsedTenants.map((item) => ({
+          tenantId: item.tenantId,
+          tenantName: item.tenantId ? tenantMap.get(item.tenantId)?.name ?? "Unknown tenant" : "Unknown",
+          tenantSlug: item.tenantId ? tenantMap.get(item.tenantId)?.slug ?? null : null,
+          isActive: item.tenantId ? tenantMap.get(item.tenantId)?.isActive ?? false : false,
+          requestCount: item._count.id
+        })),
+        topEndpoints: topEndpoints.map((item) => ({
+          path: item.path,
+          requestCount: item._count.id,
+          avgDurationMs: Number((item._avg.durationMs ?? 0).toFixed(1))
+        })),
+        latestErrors,
+        monitoringDisabled: false
+      });
+    } catch (error: unknown) {
+      if (!isMissingApiRequestLogTableError(error)) {
+        throw error;
+      }
+      return res.json({
+        overview: {
+          windowHours: hours,
+          totalRequests: 0,
+          totalErrors: 0,
+          errorRatePercent: 0,
+          avgDurationMs: 0
+        },
+        mostUsedTenants: [],
+        topEndpoints: [],
+        latestErrors: [],
+        monitoringDisabled: true
+      });
+    }
+  })
+);
+
+/**
+ * GET /admin/monitoring/requests
+ * Detailed request logs with filters
+ */
+router.get(
+  "/monitoring/requests",
+  ...adminAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = monitoringQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid monitoring query params" });
+    }
+    const { hours, limit, tenantId, status } = parsed.data;
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    let requests;
+    try {
+      requests = await prisma.apiRequestLog.findMany({
+        where: {
+          createdAt: { gte: since },
+          ...(tenantId ? { tenantId } : {}),
+          ...(status ? { statusCode: status } : {})
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit
+      });
+    } catch (error: unknown) {
+      if (!isMissingApiRequestLogTableError(error)) {
+        throw error;
+      }
+      return res.json({ requests: [], monitoringDisabled: true });
+    }
+
+    const ids = Array.from(new Set(requests.map((item) => item.tenantId).filter((value): value is number => value !== null)));
+    const tenants = ids.length
+      ? await prisma.tenant.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true, slug: true }
+        })
+      : [];
+    const tenantMap = new Map(tenants.map((tenant) => [tenant.id, tenant]));
+
+    return res.json({
+      requests: requests.map((item) => ({
+        ...item,
+        tenantName: item.tenantId ? tenantMap.get(item.tenantId)?.name ?? "Unknown tenant" : "Unknown"
+      }))
     });
   })
 );

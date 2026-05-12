@@ -10,6 +10,7 @@ import { LEAD_STATUSES } from '@/lib/constants';
 import { ApiError, api } from '@/lib/api';
 import { formatDate, getPriorityColor } from '@/lib/utils';
 import { Lead, LeadStatus, Priority } from '@/lib/types';
+import { getTenantSlugFromHost } from '@/lib/tenant';
 
 type ActiveTab = 'import' | 'messaging' | 'updates' | 'export';
 type FilterStatus = LeadStatus | 'ALL';
@@ -63,7 +64,7 @@ type MessageTemplate = {
   body: string;
 };
 
-const REQUIRED_CSV_COLUMNS = ['name', 'phone'];
+const BASE_REQUIRED_CSV_COLUMNS = ['name', 'phone'];
 const OPTIONAL_CSV_COLUMNS = [
   'sr_no',
   'email',
@@ -151,6 +152,8 @@ const excelBufferToCsv = async (file: File) => {
 export default function BulkActionsClient() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const importPausedRef = useRef(false);
+  const importCancelRef = useRef(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('import');
   const [loadingPage, setLoadingPage] = useState(true);
   const [pageError, setPageError] = useState('');
@@ -163,6 +166,15 @@ export default function BulkActionsClient() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
+  const [importPaused, setImportPaused] = useState(false);
+  const [importCancelRequested, setImportCancelRequested] = useState(false);
+  const [importProgress, setImportProgress] = useState({
+    processed: 0,
+    total: 0,
+    created: 0,
+    skipped: 0,
+    startedAt: 0
+  });
   const [messageChannel, setMessageChannel] = useState<MessageChannel>('whatsapp');
   const [messageText, setMessageText] = useState('');
   const [messageStatusFilter, setMessageStatusFilter] = useState<FilterStatus>('ALL');
@@ -184,6 +196,18 @@ export default function BulkActionsClient() {
   const [exportAssignedFilter, setExportAssignedFilter] = useState<AssignedFilter>('ALL');
   const [exportColumns, setExportColumns] = useState<string[]>(DEFAULT_EXPORT_COLUMNS);
   const [exportLoading, setExportLoading] = useState(false);
+  const [tenantSlug, setTenantSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTenantSlug(getTenantSlugFromHost());
+  }, []);
+
+  const requiredCsvColumns = useMemo(() => {
+    if (tenantSlug?.toLowerCase() === 'dvcoe') {
+      return [...BASE_REQUIRED_CSV_COLUMNS, 'course'];
+    }
+    return BASE_REQUIRED_CSV_COLUMNS;
+  }, [tenantSlug]);
 
   const handleAuthFailure = () => {
     clearSession();
@@ -221,6 +245,14 @@ export default function BulkActionsClient() {
   useEffect(() => {
     void loadPageData();
   }, []);
+
+  useEffect(() => {
+    importPausedRef.current = importPaused;
+  }, [importPaused]);
+
+  useEffect(() => {
+    importCancelRef.current = importCancelRequested;
+  }, [importCancelRequested]);
 
   const filteredMessagingLeads = useMemo(
     () =>
@@ -314,17 +346,57 @@ export default function BulkActionsClient() {
   };
 
   const handleCommitImport = async () => {
-    if (!csvText) {
-      setPageError('Upload a CSV file first.');
+    if (!preview) {
+      setPageError('Preview and upload CSV first.');
+      return;
+    }
+
+    const readyRows = preview.rows
+      .filter((row): row is ImportPreviewRow & { normalized: NonNullable<ImportPreviewRow["normalized"]> } => row.status === 'ready' && row.normalized !== null)
+      .map((row) => row.normalized);
+
+    if (readyRows.length === 0) {
+      setPageError('No ready rows available to import.');
       return;
     }
 
     resetFeedback();
     setImportLoading(true);
+    setImportPaused(false);
+    setImportCancelRequested(false);
+    const startedAt = Date.now();
+    setImportProgress({ processed: 0, total: readyRows.length, created: 0, skipped: 0, startedAt });
 
     try {
-      const result = await api.commitCsvImport(csvText);
-      setPageSuccess(result.message);
+      const CHUNK_SIZE = 25;
+      let processed = 0;
+      let created = 0;
+      let skipped = 0;
+
+      for (let index = 0; index < readyRows.length; index += CHUNK_SIZE) {
+        if (importCancelRef.current) break;
+
+        while (importPausedRef.current) {
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          if (importCancelRef.current) break;
+        }
+        if (importCancelRef.current) break;
+
+        const chunk = readyRows.slice(index, index + CHUNK_SIZE);
+        // eslint-disable-next-line no-await-in-loop
+        const result = await api.commitCsvChunk(chunk);
+        processed += chunk.length;
+        created += result.createdCount;
+        skipped += result.skippedCount;
+        setImportProgress({ processed, total: readyRows.length, created, skipped, startedAt });
+      }
+
+      if (importCancelRef.current) {
+        setPageSuccess(`Import cancelled. Completed ${processed}/${readyRows.length}.`);
+      } else {
+        setPageSuccess(`Import completed: ${created} created, ${skipped} skipped.`);
+      }
       setPreview(null);
       setCsvText('');
       setCsvFileName('');
@@ -464,6 +536,12 @@ export default function BulkActionsClient() {
   };
 
   const previewReadyRows = preview?.rows.filter((row) => row.status === 'ready').length ?? 0;
+  const importPercent = importProgress.total > 0 ? Math.round((importProgress.processed / importProgress.total) * 100) : 0;
+  const elapsedMs = importProgress.startedAt ? Date.now() - importProgress.startedAt : 0;
+  const avgPerRowMs = importProgress.processed > 0 ? elapsedMs / importProgress.processed : 0;
+  const etaMs = avgPerRowMs > 0 ? (importProgress.total - importProgress.processed) * avgPerRowMs : 0;
+  const etaHours = Math.floor(etaMs / 3600000);
+  const etaMinutes = Math.floor((etaMs % 3600000) / 60000);
   const filteredMessagingIds = filteredMessagingLeads.map((lead) => lead.id);
   const filteredUpdateIds = filteredUpdateLeads.map((lead) => lead.id);
 
@@ -516,7 +594,7 @@ export default function BulkActionsClient() {
                 Required headers
               </p>
               <div className="flex flex-wrap gap-2">
-                {REQUIRED_CSV_COLUMNS.map((column) => (
+                  {requiredCsvColumns.map((column) => (
                   <span
                     key={column}
                     className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700"
@@ -662,6 +740,37 @@ export default function BulkActionsClient() {
                 {importLoading ? 'Importing...' : `Import ${previewReadyRows} lead(s)`}
               </button>
             </div>
+            {importLoading ? (
+              <div className="border-b border-slate-200/70 px-5 py-4">
+                <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-700">
+                  <span>{importProgress.processed}/{importProgress.total}</span>
+                  <span>ETA {String(etaHours).padStart(2, '0')}:{String(etaMinutes).padStart(2, '0')}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded bg-slate-200">
+                  <div className="h-full bg-blue-600 transition-all" style={{ width: `${importPercent}%` }} />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+                  <span>Created: {importProgress.created}</span>
+                  <span>Skipped: {importProgress.skipped}</span>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setImportPaused((value) => !value)}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700"
+                  >
+                    {importPaused ? 'Resume' : 'Pause'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImportCancelRequested(true)}
+                    className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-semibold text-red-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="max-h-[30rem] overflow-auto">
               <table className="min-w-full text-left text-sm">

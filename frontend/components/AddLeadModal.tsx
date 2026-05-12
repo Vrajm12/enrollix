@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { COURSES, SOURCES } from '@/lib/constants';
+import { CITIES_BY_STATE, INDIA_STATES } from '@/lib/indiaLocations';
 
 interface AddLeadModalProps {
   open: boolean;
@@ -78,6 +79,8 @@ export function AddLeadModal({
         setCourseOptions(COURSES);
       });
   }, [open]);
+
+  const cityOptions = formData.region ? (CITIES_BY_STATE[formData.region] ?? []) : [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -181,26 +184,42 @@ export function AddLeadModal({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-slate-700 mb-1 block">Region</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. West"
+                <label className="text-xs font-medium text-slate-700 mb-1 block">State</label>
+                <select
                   value={formData.region}
-                  onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                  className="rounded-lg border-slate-200"
+                  onChange={(e) =>
+                    setFormData((current) => ({
+                      ...current,
+                      region: e.target.value,
+                      city: e.target.value === current.region ? current.city : '',
+                    }))
+                  }
                   disabled={isLoading}
-                />
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">Select state</option>
+                  {INDIA_STATES.map((state) => (
+                    <option key={state} value={state}>
+                      {state}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1 block">City</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Pune"
+                <select
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                  className="rounded-lg border-slate-200"
-                  disabled={isLoading}
-                />
+                  disabled={isLoading || !formData.region}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">{formData.region ? 'Select city' : 'Select state first'}</option>
+                  {cityOptions.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

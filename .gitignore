@@ -4,6 +4,11 @@ dist
 .turbo
 .env
 .env.local
+.env.example
+backend/.env.example
+frontend/.env.example
+logs/
+*.log
 backend/node_modules
 frontend/node_modules
 backend/dist

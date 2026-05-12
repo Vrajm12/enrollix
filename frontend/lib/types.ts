@@ -3,6 +3,7 @@ export type UserRole = "SUPER_ADMIN" | "TENANT_ADMIN" | "ADMIN" | "COUNSELOR";
 export type LeadStatus =
   | "LEAD"
   | "CONTACTED"
+  | "NOT_INTERESTED"
   | "INTERESTED"
   | "QUALIFIED"
   | "APPLIED"

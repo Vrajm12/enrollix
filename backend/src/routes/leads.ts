@@ -52,7 +52,12 @@ const parseLeadId = (idParam: string) => {
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const region = typeof req.query.region === "string" ? req.query.region.trim() : "";
+    const stateQuery =
+      typeof req.query.state === "string"
+        ? req.query.state.trim()
+        : typeof req.query.region === "string"
+          ? req.query.region.trim()
+          : "";
     const city = typeof req.query.city === "string" ? req.query.city.trim() : "";
     const course = typeof req.query.course === "string" ? req.query.course.trim() : "";
     const tenantFilter = { tenantId: req.user!.tenantId };
@@ -68,11 +73,11 @@ router.get(
     const where: Prisma.LeadWhereInput = { ...baseWhere };
     const andFilters: Prisma.LeadWhereInput[] = [];
 
-    if (region) {
+    if (stateQuery) {
       andFilters.push({
         OR: [
-          { region: { contains: region, mode: "insensitive" } },
-          { address: { contains: region, mode: "insensitive" } }
+          { region: { contains: stateQuery, mode: "insensitive" } },
+          { address: { contains: stateQuery, mode: "insensitive" } }
         ]
       });
     }

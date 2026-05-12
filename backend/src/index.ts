@@ -1,9 +1,11 @@
 import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
+import { ipKeyGenerator } from "express-rate-limit";
 import { env } from "./config.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
+import { requestLogger } from "./middleware/requestLogger.js";
 import { tenantContext } from "./middleware/tenant.js";
 import { securityHeaders, rateLimitHeaders } from "./middleware/security.js";
 import activitiesRouter from "./routes/activities.js";
@@ -56,7 +58,7 @@ const authLimiter = rateLimit({
       typeof req.body?.email === "string"
         ? req.body.email.trim().toLowerCase()
         : "unknown";
-    return `${req.ip}:${email}`;
+    return `${ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown")}:${email}`;
   },
   skip: (req) => {
     // Don't rate limit health checks and info endpoints
@@ -134,6 +136,7 @@ app.use((req, res, next) => {
 
 // Rate limiting response headers
 app.use(rateLimitHeaders);
+app.use(requestLogger);
 
 app.get("/health", (_req, res) => {
   res.json({ 

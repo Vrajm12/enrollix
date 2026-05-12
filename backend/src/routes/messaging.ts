@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { MessageStatus } from "@prisma/client";
+import twilio from "twilio";
 import { prisma } from "../prisma.js";
 import { validateResourceTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -209,6 +210,10 @@ router.get(
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }
+    // ✅ CRITICAL: Validate tenant access
+    if (!validateResourceTenant(req.user!.tenantId, lead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied for this lead" });
+    }
 
     const messages = await prisma.sMSMessage.findMany({
       where: { leadId },
@@ -236,7 +241,10 @@ router.post(
 
     // Fetch all leads
     const leads = await prisma.lead.findMany({
-      where: { id: { in: parsed.data.leadIds } }
+      where: {
+        tenantId: req.user!.tenantId,
+        id: { in: parsed.data.leadIds }
+      }
     });
 
     if (leads.length === 0) {
@@ -314,13 +322,13 @@ router.get(
   "/stats",
   asyncHandler(async (req, res) => {
     const [whatsappCount, smsCount, whatsappDelivered, smsDelivered] = await Promise.all([
-      prisma.whatsAppMessage.count(),
-      prisma.sMSMessage.count(),
+      prisma.whatsAppMessage.count({ where: { tenantId: req.user!.tenantId } }),
+      prisma.sMSMessage.count({ where: { tenantId: req.user!.tenantId } }),
       prisma.whatsAppMessage.count({
-        where: { status: "DELIVERED" }
+        where: { tenantId: req.user!.tenantId, status: "DELIVERED" }
       }),
       prisma.sMSMessage.count({
-        where: { status: "DELIVERED" }
+        where: { tenantId: req.user!.tenantId, status: "DELIVERED" }
       })
     ]);
 
@@ -356,7 +364,10 @@ router.get(
     try {
       // Get message from database
       const message = await prisma.sMSMessage.findFirst({
-        where: { messageId: messageSid },
+        where: {
+          tenantId: req.user!.tenantId,
+          messageId: messageSid
+        },
         include: { user: { select: { id: true, name: true, email: true } } }
       });
 
@@ -412,6 +423,23 @@ router.get(
 router.post(
   "/webhooks/sms-status",
   asyncHandler(async (req, res) => {
+    const signature = req.header("x-twilio-signature");
+    const requestUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
+    const shouldVerifySignature = process.env.NODE_ENV === "production" && Boolean(env.TWILIO_AUTH_TOKEN);
+
+    if (shouldVerifySignature) {
+      const isValidTwilioRequest = twilio.validateRequest(
+        env.TWILIO_AUTH_TOKEN!,
+        signature ?? "",
+        requestUrl,
+        req.body ?? {}
+      );
+
+      if (!isValidTwilioRequest) {
+        return res.status(403).json({ message: "Invalid webhook signature" });
+      }
+    }
+
     // Webhook payload from Twilio contains:
     // MessageSid, AccountSid, From, To, MessageStatus, ErrorCode, etc.
     const { MessageSid, MessageStatus, To, ErrorCode } = req.body;

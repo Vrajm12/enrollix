@@ -23,9 +23,11 @@ router.get(
   "/followups",
   asyncHandler(async (req, res) => {
     const dateParam = typeof req.query.date === "string" ? req.query.date : "";
+    const scopeParam = typeof req.query.scope === "string" ? req.query.scope : "selected";
     const page = Math.max(Number(req.query.page ?? 1) || 1, 1);
     const pageSizeRaw = Number(req.query.pageSize ?? 25) || 25;
     const pageSize = Math.min(Math.max(pageSizeRaw, 1), 100);
+    const scope = ["selected", "today", "missed", "all"].includes(scopeParam) ? scopeParam : "selected";
 
     const selectedDate = dateParam ? new Date(`${dateParam}T00:00:00`) : new Date();
     if (Number.isNaN(selectedDate.getTime())) {
@@ -46,10 +48,28 @@ router.get(
       ...accessWhere,
       nextFollowUp: { gte: selectedDate, lt: nextDay }
     };
+    const todayWhere = {
+      ...accessWhere,
+      nextFollowUp: { gte: today, lt: tomorrow }
+    };
+    const missedWhere = {
+      ...accessWhere,
+      nextFollowUp: { lt: today }
+    };
+    const allWhere = {
+      ...accessWhere,
+      nextFollowUp: { not: null }
+    };
 
-    const [items, total, todayCount, missedCount] = await Promise.all([
+    const activeWhere =
+      scope === "today" ? todayWhere
+      : scope === "missed" ? missedWhere
+      : scope === "all" ? allWhere
+      : selectedDateWhere;
+
+    const [items, total, todayCount, missedCount, selectedCount, allCount] = await Promise.all([
       prisma.lead.findMany({
-        where: selectedDateWhere,
+        where: activeWhere,
         include: {
           assignedCounselor: {
             select: { id: true, name: true, email: true }
@@ -59,19 +79,11 @@ router.get(
         skip: (page - 1) * pageSize,
         take: pageSize
       }),
+      prisma.lead.count({ where: activeWhere }),
+      prisma.lead.count({ where: todayWhere }),
+      prisma.lead.count({ where: missedWhere }),
       prisma.lead.count({ where: selectedDateWhere }),
-      prisma.lead.count({
-        where: {
-          ...accessWhere,
-          nextFollowUp: { gte: today, lt: tomorrow }
-        }
-      }),
-      prisma.lead.count({
-        where: {
-          ...accessWhere,
-          nextFollowUp: { lt: today }
-        }
-      })
+      prisma.lead.count({ where: allWhere })
     ]);
 
     return res.json({
@@ -81,10 +93,12 @@ router.get(
       pageSize,
       totalPages: Math.max(Math.ceil(total / pageSize), 1),
       counts: {
-        selectedDate: total,
+        selectedDate: selectedCount,
         today: todayCount,
-        missed: missedCount
-      }
+        missed: missedCount,
+        totalRecords: allCount
+      },
+      scope
     });
   })
 );

@@ -17,6 +17,7 @@ const formatLabel = (value: string) =>
 const statusClasses: Record<Lead['status'], string> = {
   LEAD: 'bg-slate-100 text-slate-700',
   CONTACTED: 'bg-blue-50 text-blue-700',
+  NOT_INTERESTED: 'bg-rose-50 text-rose-700',
   INTERESTED: 'bg-violet-50 text-violet-700',
   QUALIFIED: 'bg-amber-50 text-amber-700',
   APPLIED: 'bg-cyan-50 text-cyan-700',

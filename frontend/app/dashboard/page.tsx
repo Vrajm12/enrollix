@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { Navbar } from "@/components/Navbar";
 import { AddLeadModal } from "@/components/AddLeadModal";
@@ -9,7 +9,6 @@ import { LeadDetailDrawer } from "@/components/LeadDetailDrawer";
 import { ModernKPICard } from "@/components/ModernKPICard";
 import { LeadFunnel } from "@/components/LeadFunnel";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
-import { PipelineProgress } from "@/components/PipelineProgress";
 import { ApiError, api } from "@/lib/api";
 import { clearSession, getToken, getUser } from "@/lib/auth";
 import { Activity, Lead, LeadStatus, Priority, User } from "@/lib/types";
@@ -158,6 +157,67 @@ export default function DashboardPage() {
     return "note";
   };
 
+  const weekStart = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    const day = start.getDay(); // 0=Sun
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - diffToMonday);
+    start.setHours(0, 0, 0, 0);
+    return start;
+  }, []);
+
+  const closedThisWeek = useMemo(
+    () =>
+      leads.filter(
+        (lead) =>
+          lead.status === "ENROLLED" &&
+          lead.updatedAt &&
+          new Date(lead.updatedAt) >= weekStart
+      ).length,
+    [leads, weekStart]
+  );
+
+  const avgResponseLabel = useMemo(() => {
+    const responseHours = leads
+      .filter((lead) => lead.createdAt && lead.nextFollowUp)
+      .map((lead) => {
+        const created = new Date(lead.createdAt).getTime();
+        const nextFollow = new Date(lead.nextFollowUp as string).getTime();
+        const diffHours = (nextFollow - created) / (1000 * 60 * 60);
+        return Number.isFinite(diffHours) && diffHours >= 0 ? diffHours : null;
+      })
+      .filter((value): value is number => value !== null);
+
+    if (responseHours.length === 0) return "N/A";
+
+    const avgHours =
+      responseHours.reduce((sum, value) => sum + value, 0) / responseHours.length;
+
+    if (avgHours < 1) {
+      return `${Math.max(1, Math.round(avgHours * 60))}m`;
+    }
+    if (avgHours < 24) {
+      return `${avgHours.toFixed(1)}h`;
+    }
+    return `${(avgHours / 24).toFixed(1)}d`;
+  }, [leads]);
+
+  const upcomingFollowupsCount = useMemo(() => {
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    return leads.filter((lead) => {
+      if (!lead.nextFollowUp) return false;
+      return new Date(lead.nextFollowUp) > endOfToday;
+    }).length;
+  }, [leads]);
+
+  const followupHealthScore = useMemo(() => {
+    const due = todayFollowups.length + missedFollowups.length;
+    if (due === 0) return 100;
+    return Math.max(0, Math.round((todayFollowups.length / due) * 100));
+  }, [todayFollowups.length, missedFollowups.length]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
@@ -248,6 +308,7 @@ export default function DashboardPage() {
                     stages={[
                       { name: 'Lead', count: leads.filter(l => l.status === 'LEAD').length, color: 'bg-blue-500' },
                       { name: 'Contacted', count: leads.filter(l => l.status === 'CONTACTED').length, color: 'bg-blue-400' },
+                      { name: 'Not Interested', count: leads.filter(l => l.status === 'NOT_INTERESTED').length, color: 'bg-rose-400' },
                       { name: 'Interested', count: leads.filter(l => l.status === 'INTERESTED').length, color: 'bg-cyan-400' },
                       { name: 'Qualified', count: leads.filter(l => l.status === 'QUALIFIED').length, color: 'bg-teal-400' },
                       { name: 'Enrolled', count: leads.filter(l => l.status === 'ENROLLED').length, color: 'bg-green-500' },
@@ -255,17 +316,42 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                {/* Pipeline Progress */}
+                {/* Follow-up Health */}
                 <div>
-                  <PipelineProgress
-                    stages={[
-                      { name: 'Lead', count: leads.filter(l => l.status === 'LEAD').length, color: 'bg-blue-500' },
-                      { name: 'Contacted', count: leads.filter(l => l.status === 'CONTACTED').length, color: 'bg-cyan-500' },
-                      { name: 'Qualified', count: leads.filter(l => l.status === 'QUALIFIED').length, color: 'bg-green-500' },
-                      { name: 'Enrolled', count: leads.filter(l => l.status === 'ENROLLED').length, color: 'bg-emerald-500' },
-                    ]}
-                    total={leads.length}
-                  />
+                  <div className="bg-white border border-blue-100 rounded-2xl p-8">
+                    <div className="mb-6">
+                      <h2 className="text-lg font-bold text-slate-900">Follow-up Health</h2>
+                      <p className="text-sm text-slate-500 mt-1">Daily action visibility for your team</p>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between rounded-lg bg-blue-50 px-4 py-3">
+                        <span className="text-sm font-medium text-slate-700">Due Today</span>
+                        <span className="text-lg font-bold text-blue-700">{todayFollowups.length}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-red-50 px-4 py-3">
+                        <span className="text-sm font-medium text-slate-700">Missed</span>
+                        <span className="text-lg font-bold text-red-600">{missedFollowups.length}</span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-lg bg-cyan-50 px-4 py-3">
+                        <span className="text-sm font-medium text-slate-700">Upcoming</span>
+                        <span className="text-lg font-bold text-cyan-700">{upcomingFollowupsCount}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-5 border-t border-blue-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs uppercase tracking-wider font-semibold text-slate-500">Health Score</span>
+                        <span className="text-sm font-bold text-slate-900">{followupHealthScore}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-blue-100 overflow-hidden">
+                        <div
+                          className="h-full bg-blue-600 transition-all duration-300"
+                          style={{ width: `${followupHealthScore}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -328,11 +414,11 @@ export default function DashboardPage() {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-slate-600">Avg Response</span>
-                        <span className="font-semibold text-slate-900">2.5h</span>
+                        <span className="font-semibold text-slate-900">{avgResponseLabel}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-slate-600">Closed This Week</span>
-                        <span className="font-semibold text-slate-900">8</span>
+                        <span className="font-semibold text-slate-900">{closedThisWeek}</span>
                       </div>
                     </div>
                   </div>

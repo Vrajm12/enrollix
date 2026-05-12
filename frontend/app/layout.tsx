@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
+import FollowupReminderToast from "@/components/FollowupReminderToast";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ['latin'],
@@ -36,7 +37,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning className={cn(plusJakartaSans.variable)}>
-      <body className="font-sans [font-family:var(--font-plus-jakarta-sans)]">{children}</body>
+      <body className="font-sans [font-family:var(--font-plus-jakarta-sans)]">
+        {children}
+        <FollowupReminderToast />
+      </body>
     </html>
   );
 }

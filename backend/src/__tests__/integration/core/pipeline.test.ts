@@ -11,7 +11,7 @@ jest.mock('../../../prisma', () => ({
   prisma: mockPrisma
 }));
 
-type LeadStatus = 'LEAD' | 'CONTACTED' | 'INTERESTED' | 'QUALIFIED' | 'APPLIED' | 'ENROLLED';
+type LeadStatus = 'LEAD' | 'CONTACTED' | 'NOT_INTERESTED' | 'INTERESTED' | 'QUALIFIED' | 'APPLIED' | 'ENROLLED';
 
 describe('Lead Pipeline & Status Management', () => {
   beforeEach(() => {
@@ -149,8 +149,9 @@ describe('Lead Pipeline & Status Management', () => {
 
       const isValidTransition = (from: LeadStatus, to: LeadStatus): boolean => {
         const pipeline: Record<LeadStatus, LeadStatus[]> = {
-          LEAD: ['CONTACTED', 'INTERESTED', 'QUALIFIED', 'APPLIED', 'ENROLLED'],
-          CONTACTED: ['INTERESTED', 'QUALIFIED', 'APPLIED', 'ENROLLED'],
+          LEAD: ['CONTACTED', 'NOT_INTERESTED', 'INTERESTED', 'QUALIFIED', 'APPLIED', 'ENROLLED'],
+          CONTACTED: ['NOT_INTERESTED', 'INTERESTED', 'QUALIFIED', 'APPLIED', 'ENROLLED'],
+          NOT_INTERESTED: [],
           INTERESTED: ['QUALIFIED', 'APPLIED', 'ENROLLED'],
           QUALIFIED: ['APPLIED', 'ENROLLED'],
           APPLIED: ['ENROLLED'],
@@ -175,10 +176,11 @@ describe('Lead Pipeline & Status Management', () => {
         const stageOrder: Record<LeadStatus, number> = {
           LEAD: 0,
           CONTACTED: 1,
-          INTERESTED: 2,
-          QUALIFIED: 3,
-          APPLIED: 4,
-          ENROLLED: 5
+          NOT_INTERESTED: 2,
+          INTERESTED: 3,
+          QUALIFIED: 4,
+          APPLIED: 5,
+          ENROLLED: 6
         };
         return stageOrder[to] >= stageOrder[from];
       };
@@ -195,10 +197,11 @@ describe('Lead Pipeline & Status Management', () => {
         const stageOrder: Record<LeadStatus, number> = {
           LEAD: 0,
           CONTACTED: 1,
-          INTERESTED: 2,
-          QUALIFIED: 3,
-          APPLIED: 4,
-          ENROLLED: 5
+          NOT_INTERESTED: 2,
+          INTERESTED: 3,
+          QUALIFIED: 4,
+          APPLIED: 5,
+          ENROLLED: 6
         };
         return stageOrder[to] >= stageOrder[from];
       };
@@ -228,10 +231,11 @@ describe('Lead Pipeline & Status Management', () => {
         const stageOrder: Record<LeadStatus, number> = {
           LEAD: 0,
           CONTACTED: 1,
-          INTERESTED: 2,
-          QUALIFIED: 3,
-          APPLIED: 4,
-          ENROLLED: 5
+          NOT_INTERESTED: 2,
+          INTERESTED: 3,
+          QUALIFIED: 4,
+          APPLIED: 5,
+          ENROLLED: 6
         };
         return stageOrder[to] >= stageOrder[from];
       };

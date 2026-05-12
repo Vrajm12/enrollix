@@ -81,7 +81,7 @@ export const api = {
     }),
 
   // Dashboard
-  getFollowupsByDate: (date: string, page = 1, pageSize = 25) =>
+  getFollowupsByDate: (date: string, page = 1, pageSize = 25, scope: "selected" | "today" | "missed" | "all" = "selected") =>
     request<{
       items: Lead[];
       total: number;
@@ -92,17 +92,19 @@ export const api = {
         selectedDate: number;
         today: number;
         missed: number;
+        totalRecords: number;
       };
-    }>(`/dashboard/followups?date=${encodeURIComponent(date)}&page=${page}&pageSize=${pageSize}`),
+      scope: "selected" | "today" | "missed" | "all";
+    }>(`/dashboard/followups?date=${encodeURIComponent(date)}&page=${page}&pageSize=${pageSize}&scope=${scope}`),
   getTodayFollowups: () => request<Lead[]>("/dashboard/followups/today"),
   getMissedFollowups: () => request<Lead[]>("/dashboard/followups/missed"),
   getLeadsByStatus: () => request<Record<string, Lead[]>>("/dashboard/leads/by-status"),
   getRecentActivities: () => request<Activity[]>("/dashboard/activities/recent"),
 
   // Leads
-  getLeads: (filters?: { region?: string; city?: string; course?: string }) => {
+  getLeads: (filters?: { state?: string; city?: string; course?: string }) => {
     const params = new URLSearchParams();
-    if (filters?.region) params.append("region", filters.region);
+    if (filters?.state) params.append("state", filters.state);
     if (filters?.city) params.append("city", filters.city);
     if (filters?.course) params.append("course", filters.course);
     const query = params.toString();
@@ -135,14 +137,30 @@ export const api = {
       body: { nextFollowUp },
     }),
   deleteLeadsBulk: (leadIds: number[]) =>
-    request<{
-      message: string;
-      deletedCount: number;
-      requestedCount: number;
-    }>("/leads/bulk-delete", {
-      method: "DELETE",
-      body: { leadIds },
-    }),
+    (async () => {
+      try {
+        return await request<{
+          message: string;
+          deletedCount: number;
+          requestedCount: number;
+        }>("/leads/bulk-delete", {
+          method: "DELETE",
+          body: { leadIds },
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          return request<{
+            message: string;
+            deletedCount: number;
+            requestedCount: number;
+          }>("/bulk/leads/delete", {
+            method: "DELETE",
+            body: { leadIds },
+          });
+        }
+        throw error;
+      }
+    })(),
 
   // Bulk actions
   previewCsvImport: (csv: string) =>
@@ -203,6 +221,28 @@ export const api = {
     }>("/bulk/import/csv/commit", {
       method: "POST",
       body: { csv },
+    }),
+  commitCsvChunk: (rows: Array<{
+    name: string;
+    phone: string;
+    email: string | null;
+    address: string | null;
+    parentContact: string | null;
+    course: string | null;
+    source: string | null;
+    status: LeadStatus;
+    priority: Priority;
+    nextFollowUp: string | null;
+  }>) =>
+    request<{
+      message: string;
+      createdCount: number;
+      skippedCount: number;
+      created: Array<{ id: number; name: string; phone: string; email: string | null; status: LeadStatus; priority: Priority }>;
+      skipped: Array<{ rowNumber: number; name: string; reason: string }>;
+    }>("/bulk/import/csv/chunk", {
+      method: "POST",
+      body: { rows },
     }),
   bulkUpdateLeads: (payload: {
     leadIds: number[];
@@ -304,6 +344,43 @@ export const api = {
       method: "POST",
       body: payload
     }),
+  getTeamInsights: () =>
+    request<{
+      tenantSummary: {
+        totalUsers: number;
+        totalLeads: number;
+        totalActivities: number;
+        activeUsers: number;
+        offlineUsers: number;
+      };
+      users: Array<{
+        user: {
+          id: number;
+          name: string;
+          email: string;
+          role: "TENANT_ADMIN" | "ADMIN" | "COUNSELOR";
+          createdAt: string;
+        };
+        session: {
+          status: "ACTIVE" | "OFFLINE";
+          lastSeenAt: string | null;
+          lastLoginAt: string | null;
+          lastLogoutAt: string | null;
+          requestsLast24h: number;
+        };
+        dashboardData: {
+          assignedLeads: number;
+          todayFollowups: number;
+          missedFollowups: number;
+          statusBifurcation: Record<string, number>;
+          priorityBifurcation: Record<string, number>;
+          communication: {
+            whatsappMessages: number;
+            smsMessages: number;
+          };
+        };
+      }>;
+    }>("/users/team/insights"),
 
   // Messaging - WhatsApp
   sendWhatsApp: (leadId: number, message: string, mediaUrl?: string) =>
@@ -328,34 +405,44 @@ export const api = {
   getMessagingStats: () => request("/messaging/stats"),
 
   // Reporting
-  getFunnelReport: (startDate?: string, endDate?: string) => {
+  getFunnelReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
+    if (state) params.append("state", state);
+    if (city) params.append("city", city);
     return request(`/reports/funnel?${params.toString()}`);
   },
-  getRevenueReport: (startDate?: string, endDate?: string) => {
+  getRevenueReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
+    if (state) params.append("state", state);
+    if (city) params.append("city", city);
     return request(`/reports/revenue?${params.toString()}`);
   },
-  getTeamPerformanceReport: (startDate?: string, endDate?: string) => {
+  getTeamPerformanceReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
+    if (state) params.append("state", state);
+    if (city) params.append("city", city);
     return request(`/reports/team-performance?${params.toString()}`);
   },
-  getLeadSourcesReport: (startDate?: string, endDate?: string) => {
+  getLeadSourcesReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
+    if (state) params.append("state", state);
+    if (city) params.append("city", city);
     return request(`/reports/lead-sources?${params.toString()}`);
   },
-  getPriorityDistributionReport: (startDate?: string, endDate?: string) => {
+  getPriorityDistributionReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
+    if (state) params.append("state", state);
+    if (city) params.append("city", city);
     return request(`/reports/priority-distribution?${params.toString()}`);
   },
   saveReport: (reportType: string, data: unknown, filters?: unknown) =>

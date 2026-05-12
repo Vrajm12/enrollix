@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Filter } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { clearSession, getUser } from "@/lib/auth";
 import { Lead, LeadStatus } from "@/lib/types";
 import { LEAD_STATUSES } from "@/lib/constants";
+import { CITIES_BY_STATE, INDIA_STATES } from "@/lib/indiaLocations";
 import Sidebar from "@/components/Sidebar";
 import { LeadDetailPanel } from "@/components/LeadDetailPanel";
-import { getPriorityColor } from "@/lib/utils";
 import { formatDate, isOverdue } from "@/lib/utils";
 
 export function LeadListContent() {
@@ -21,26 +22,38 @@ export function LeadListContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [regionFilter, setRegionFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
+  const [draftStateFilter, setDraftStateFilter] = useState("");
+  const [draftCityFilter, setDraftCityFilter] = useState("");
+  const [draftCourseFilter, setDraftCourseFilter] = useState("");
+  const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [activeTab, setActiveTab] = useState<LeadStatus | "ALL">(
     (searchParams.get("status") as LeadStatus) || "ALL"
   );
   const [canBulkDelete, setCanBulkDelete] = useState(false);
   const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [tenantCourseOptions, setTenantCourseOptions] = useState<string[]>([]);
 
   useEffect(() => {
     const user = getUser();
     setCanBulkDelete(user?.role === "TENANT_ADMIN");
   }, []);
 
+  useEffect(() => {
+    void api
+      .getCourseOptions()
+      .then((response) => setTenantCourseOptions(response.courseOptions))
+      .catch(() => setTenantCourseOptions([]));
+  }, []);
+
   const loadLeads = async () => {
     setLoading(true);
     try {
       const response = await api.getLeads({
-        region: regionFilter || undefined,
+        state: stateFilter || undefined,
         city: cityFilter || undefined,
         course: courseFilter || undefined
       });
@@ -61,17 +74,15 @@ export function LeadListContent() {
 
   useEffect(() => {
     void loadLeads();
-  }, [regionFilter, cityFilter, courseFilter]);
+  }, [stateFilter, cityFilter, courseFilter]);
 
   useEffect(() => {
     let filtered = leads;
 
-    // Filter by status
     if (activeTab !== "ALL") {
       filtered = filtered.filter((lead) => lead.status === activeTab);
     }
 
-    // Filter by search term
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -84,8 +95,31 @@ export function LeadListContent() {
     }
 
     setFilteredLeads(filtered);
-
   }, [leads, activeTab, searchTerm, selectedLead]);
+
+  const openFilterPopup = () => {
+    setDraftStateFilter(stateFilter);
+    setDraftCityFilter(cityFilter);
+    setDraftCourseFilter(courseFilter);
+    setShowFilterPopup(true);
+  };
+
+  const applyFilters = () => {
+    setStateFilter(draftStateFilter.trim());
+    setCityFilter(draftCityFilter.trim());
+    setCourseFilter(draftCourseFilter.trim());
+    setShowFilterPopup(false);
+  };
+
+  const clearFilters = () => {
+    setDraftStateFilter("");
+    setDraftCityFilter("");
+    setDraftCourseFilter("");
+    setStateFilter("");
+    setCityFilter("");
+    setCourseFilter("");
+    setShowFilterPopup(false);
+  };
 
   const toggleLeadSelection = (leadId: number) => {
     setSelectedLeadIds((current) =>
@@ -95,6 +129,8 @@ export function LeadListContent() {
 
   const allFilteredSelected =
     filteredLeads.length > 0 && filteredLeads.every((lead) => selectedLeadIds.includes(lead.id));
+  const draftCityOptions = draftStateFilter ? (CITIES_BY_STATE[draftStateFilter] ?? []) : [];
+  const courseOptions = tenantCourseOptions;
 
   const toggleSelectAllFiltered = () => {
     if (allFilteredSelected) {
@@ -132,49 +168,113 @@ export function LeadListContent() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#f3f8ff]">
-      {/* Sidebar */}
+    <div className="flex h-screen overflow-hidden bg-[#f3f8ff]">
       <Sidebar />
 
-      {/* Main Content */}
-      <div className="flex flex-1 md:ml-60">
-        {/* Lead List */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header */}
+      <div className="flex flex-1 overflow-hidden md:ml-60">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <header className="border-b border-slate-200 bg-white p-4 md:p-6">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">Lead List</h1>
-                <p className="text-sm text-slate-600">
-                  Manage and track all your leads
-                </p>
+                <p className="text-sm text-slate-600">Manage and track all your leads</p>
               </div>
-              <Link
-                href="/dashboard"
-                className="px-4 py-2 rounded-lg bg-blue-700 text-white font-semibold hover:bg-blue-800 transition-colors self-start"
-              >
-                ← Dashboard
-              </Link>
+              <div className="flex items-center gap-2 self-start">
+                <button
+                  type="button"
+                  onClick={openFilterPopup}
+                  className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-4 py-2 font-semibold text-blue-700 hover:bg-blue-50"
+                >
+                  <Filter size={16} />
+                  Filter
+                </button>
+                <Link
+                  href="/dashboard"
+                  className="px-4 py-2 rounded-lg bg-blue-700 text-white font-semibold hover:bg-blue-800 transition-colors"
+                >
+                  Dashboard
+                </Link>
+              </div>
             </div>
           </header>
 
-          {/* Search Bar */}
           <div className="px-4 md:px-6 py-4 bg-white border-b border-slate-200">
-            <div className="grid gap-3 md:grid-cols-4">
-              <input
-                type="text"
-                placeholder="Search by name, phone, email, or course..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="md:col-span-2 w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input placeholder="Filter region" value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <input placeholder="Filter city" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} className="w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <input placeholder="Filter course" value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} className="mt-3 w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <input
+              type="text"
+              placeholder="Search by name, phone, email, or course..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {(stateFilter || cityFilter || courseFilter) && (
+              <div className="mt-3 text-xs text-slate-600">
+                Active filters:
+                {stateFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">State: {stateFilter}</span>}
+                {cityFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">City: {cityFilter}</span>}
+                {courseFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">Course: {courseFilter}</span>}
+              </div>
+            )}
           </div>
 
-          {/* Tabs */}
+          {showFilterPopup && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+                <h3 className="text-lg font-bold text-slate-900">Apply Filters</h3>
+                <p className="mt-1 text-sm text-slate-600">Filter leads by State, City, and Course.</p>
+                <div className="mt-4 space-y-3">
+                  <select
+                    value={draftStateFilter}
+                    onChange={(e) => {
+                      const nextState = e.target.value;
+                      setDraftStateFilter(nextState);
+                      if (nextState !== draftStateFilter) {
+                        setDraftCityFilter("");
+                      }
+                    }}
+                    className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">All states</option>
+                    {INDIA_STATES.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={draftCityFilter}
+                    onChange={(e) => setDraftCityFilter(e.target.value)}
+                    disabled={!draftStateFilter}
+                    className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm disabled:opacity-60"
+                  >
+                    <option value="">{draftStateFilter ? "All cities" : "Select state first"}</option>
+                    {draftCityOptions.map((city) => (
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={draftCourseFilter}
+                    onChange={(e) => setDraftCourseFilter(e.target.value)}
+                    className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">All courses</option>
+                    {courseOptions.map((course) => (
+                      <option key={course} value={course}>
+                        {course}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-5 flex justify-end gap-2">
+                  <button type="button" onClick={() => setShowFilterPopup(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">Cancel</button>
+                  <button type="button" onClick={clearFilters} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-700">Clear</button>
+                  <button type="button" onClick={applyFilters} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">Apply</button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="border-b border-slate-200 bg-white overflow-x-auto">
             <div className="flex gap-2 px-4 md:px-6 py-3 min-w-min">
               <button
@@ -183,9 +283,7 @@ export function LeadListContent() {
                   setSelectedLead(null);
                 }}
                 className={`px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition-colors ${
-                  activeTab === "ALL"
-                    ? "bg-blue-600 text-white"
-                    : "bg-blue-50 text-blue-700 hover:bg-blue-100"
+                  activeTab === "ALL" ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                 }`}
               >
                 All ({leads.length})
@@ -234,7 +332,6 @@ export function LeadListContent() {
             )}
           </div>
 
-          {/* Lead List Content */}
           <div className="flex-1 overflow-y-auto">
             {error && (
               <div className="m-4 p-4 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm">
@@ -248,10 +345,8 @@ export function LeadListContent() {
               </div>
             ) : filteredLeads.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-slate-500">
-                <span className="text-4xl mb-2">📭</span>
-                <p>
-                  {searchTerm ? "No leads match your search" : "No leads found"}
-                </p>
+                <span className="text-4xl mb-2">No leads</span>
+                <p>{searchTerm ? "No leads match your search" : "No leads found"}</p>
               </div>
             ) : (
               <div className="p-4 md:p-6 space-y-2">
@@ -266,9 +361,7 @@ export function LeadListContent() {
                       setSelectedLead(lead);
                     }}
                     className={`p-4 rounded-lg border border-slate-200 cursor-pointer transition-all hover:shadow-md ${
-                      selectedLead?.id === lead.id
-                        ? "bg-blue-50 border-blue-400 shadow-lg"
-                        : "bg-white hover:bg-blue-50"
+                      selectedLead?.id === lead.id ? "bg-blue-50 border-blue-400 shadow-lg" : "bg-white hover:bg-blue-50"
                     }`}
                   >
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
@@ -286,50 +379,36 @@ export function LeadListContent() {
                           </label>
                         </div>
                       )}
-                      {/* Name & Contact */}
                       <div className="md:col-span-2">
                         <h3 className="font-bold text-slate-900">{lead.name}</h3>
                         <p className="text-sm text-slate-600">{lead.phone}</p>
                         <p className="text-xs text-slate-500">{lead.email}</p>
                       </div>
 
-                      {/* Course */}
                       <div className="hidden md:block">
                         <p className="text-xs font-semibold text-slate-500 uppercase">Course</p>
-                        <p className="text-sm text-slate-900">{lead.course || "—"}</p>
+                        <p className="text-sm text-slate-900">{lead.course || "-"}</p>
                       </div>
 
-                      {/* Priority Badge */}
                       <div className="hidden md:block">
                         <p className="text-xs font-semibold text-slate-500 uppercase">Priority</p>
                         <span
                           className={`inline-block px-2 py-1 rounded text-xs font-bold text-white ${
-                            lead.priority === "COLD"
-                              ? "bg-blue-600"
-                              : lead.priority === "WARM"
-                                ? "bg-yellow-500"
-                                : "bg-red-600"
+                            lead.priority === "COLD" ? "bg-blue-600" : lead.priority === "WARM" ? "bg-yellow-500" : "bg-red-600"
                           }`}
                         >
                           {lead.priority}
                         </span>
                       </div>
 
-                      {/* Follow-up Date */}
                       <div className="hidden md:block">
                         <p className="text-xs font-semibold text-slate-500 uppercase">Follow-up</p>
                         {lead.nextFollowUp ? (
-                          <p
-                            className={`text-sm font-semibold ${
-                              isOverdue(lead.nextFollowUp)
-                                ? "text-red-600"
-                                : "text-slate-900"
-                            }`}
-                          >
+                          <p className={`text-sm font-semibold ${isOverdue(lead.nextFollowUp) ? "text-red-600" : "text-slate-900"}`}>
                             {formatDate(lead.nextFollowUp)}
                           </p>
                         ) : (
-                          <p className="text-sm text-slate-400">—</p>
+                          <p className="text-sm text-slate-400">-</p>
                         )}
                       </div>
                     </div>
@@ -340,12 +419,7 @@ export function LeadListContent() {
           </div>
         </div>
 
-        {/* Right Detail Panel */}
-        <LeadDetailPanel
-          lead={selectedLead}
-          onClose={() => setSelectedLead(null)}
-          loading={loading}
-        />
+        <LeadDetailPanel lead={selectedLead} onClose={() => setSelectedLead(null)} loading={loading} />
       </div>
     </div>
   );

@@ -95,16 +95,31 @@ See **[guides/QUICK_DEPLOYMENT.md](guides/QUICK_DEPLOYMENT.md)** for step-by-ste
 - Database: Render PostgreSQL
 - **Cost**: Free tier ($0/month)
 
-## Demo Credentials
+## Initial Access Setup
 
+Use environment variables for seeded users instead of shared demo passwords.
+
+In `backend/.env`:
+
+```env
+SEED_SUPERADMIN_EMAIL="your-admin-email@example.com"
+SEED_SUPERADMIN_NAME="Your Super Admin Name"
+SEED_SUPERADMIN_PASSWORD="use-a-strong-unique-password"
 ```
-Admin Account:
-Email: admin@crm.local
-Password: Password@123
 
-Counselor Account:
-Email: counselor@crm.local
-Password: Password@123
+Optional local/demo tenant users (created only if this is set):
+
+```env
+SEED_DEFAULT_PASSWORD="use-a-separate-strong-password"
+SEED_DEFAULT_ADMIN_EMAIL="admin@yourdomain.com"
+SEED_DEFAULT_COUNSELOR_EMAIL="counselor@yourdomain.com"
+```
+
+Then run:
+
+```bash
+cd backend
+npm run prisma:seed
 ```
 
 ## API Documentation

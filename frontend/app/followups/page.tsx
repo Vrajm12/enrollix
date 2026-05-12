@@ -31,13 +31,14 @@ const todayLocal = () => {
 export default function FollowupsPage() {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState('');
+  const [scope, setScope] = useState<'selected' | 'today' | 'missed' | 'all'>('selected');
   const [followups, setFollowups] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [counts, setCounts] = useState({ selectedDate: 0, today: 0, missed: 0 });
+  const [counts, setCounts] = useState({ selectedDate: 0, today: 0, missed: 0, totalRecords: 0 });
   const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
@@ -69,7 +70,7 @@ export default function FollowupsPage() {
     const loadFollowups = async () => {
       try {
         setLoading(true);
-        const response = await api.getFollowupsByDate(selectedDate, page, 25);
+        const response = await api.getFollowupsByDate(selectedDate, page, 25, scope);
         setFollowups(response.items);
         setTotal(response.total);
         setTotalPages(response.totalPages);
@@ -88,7 +89,7 @@ export default function FollowupsPage() {
     };
 
     void loadFollowups();
-  }, [page, refreshTick, router, selectedDate]);
+  }, [page, refreshTick, router, scope, selectedDate]);
 
   const selectedLabel = useMemo(() => {
     if (!selectedDate) return '';
@@ -98,6 +99,22 @@ export default function FollowupsPage() {
       year: 'numeric',
     });
   }, [selectedDate]);
+
+  const summaryCards = [
+    { key: 'selected' as const, label: 'Selected Date', value: counts.selectedDate, valueClass: 'text-slate-900' },
+    { key: 'today' as const, label: 'Today', value: counts.today, valueClass: 'text-cyan-600' },
+    { key: 'missed' as const, label: 'Missed', value: counts.missed, valueClass: 'text-red-600' },
+    { key: 'all' as const, label: 'Total Records', value: counts.totalRecords, valueClass: 'text-blue-700' },
+  ];
+
+  const scopeLabel =
+    scope === 'today'
+      ? "Today's follow-ups"
+      : scope === 'missed'
+        ? 'Missed follow-ups'
+        : scope === 'all'
+          ? 'All follow-ups'
+          : `Follow-ups for ${selectedLabel}`;
 
   return (
     <div className="flex min-h-screen bg-[#f3f8ff]">
@@ -127,26 +144,27 @@ export default function FollowupsPage() {
             {error && <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
             <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-4">
-              <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
-                <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Selected Date</p>
-                <p className="mt-2 text-3xl font-bold text-slate-900">{counts.selectedDate}</p>
-              </div>
-              <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
-                <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Today</p>
-                <p className="mt-2 text-3xl font-bold text-cyan-600">{counts.today}</p>
-              </div>
-              <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
-                <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Missed</p>
-                <p className="mt-2 text-3xl font-bold text-red-600">{counts.missed}</p>
-              </div>
-              <div className="rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
-                <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">Total Records</p>
-                <p className="mt-2 text-3xl font-bold text-blue-700">{total}</p>
-              </div>
+              {summaryCards.map((card) => {
+                const active = scope === card.key;
+                return (
+                  <button
+                    key={card.key}
+                    type="button"
+                    onClick={() => {
+                      setScope(card.key);
+                      setPage(1);
+                    }}
+                    className={`rounded-2xl border bg-white p-6 text-left shadow-sm transition ${active ? 'border-blue-500 ring-2 ring-blue-100' : 'border-blue-100 hover:border-blue-300'}`}
+                  >
+                    <p className="text-sm font-semibold uppercase tracking-wide text-slate-600">{card.label}</p>
+                    <p className={`mt-2 text-3xl font-bold ${card.valueClass}`}>{card.value}</p>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="mb-3 flex items-center justify-between text-sm text-slate-600">
-              <p>Showing for {selectedLabel}</p>
+              <p>Showing: {scopeLabel}</p>
               <p>Page {page} of {totalPages}</p>
             </div>
 

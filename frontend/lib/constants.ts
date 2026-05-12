@@ -3,6 +3,7 @@ import { ActivityType, LeadStatus } from "./types";
 export const LEAD_STATUSES: { value: LeadStatus; label: string }[] = [
   { value: "LEAD", label: "Lead" },
   { value: "CONTACTED", label: "Contacted" },
+  { value: "NOT_INTERESTED", label: "Not Interested" },
   { value: "INTERESTED", label: "Interested" },
   { value: "QUALIFIED", label: "Qualified" },
   { value: "APPLIED", label: "Applied" },

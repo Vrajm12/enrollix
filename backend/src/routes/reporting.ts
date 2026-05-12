@@ -9,7 +9,9 @@ const router = Router();
 // Schemas
 const dateRangeSchema = z.object({
   startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional()
+  endDate: z.string().datetime().optional(),
+  state: z.string().trim().optional(),
+  city: z.string().trim().optional()
 });
 
 const buildLeadAccessWhere = (req: Request): Prisma.LeadWhereInput => {
@@ -25,26 +27,51 @@ const buildLeadAccessWhere = (req: Request): Prisma.LeadWhereInput => {
   return tenantFilter;
 };
 
+const applyLocationFilters = (
+  baseWhere: Prisma.LeadWhereInput,
+  state?: string,
+  city?: string
+): Prisma.LeadWhereInput => {
+  const andFilters: Prisma.LeadWhereInput[] = [];
+  if (state) {
+    andFilters.push({
+      region: { contains: state, mode: "insensitive" }
+    });
+  }
+  if (city) {
+    andFilters.push({
+      city: { contains: city, mode: "insensitive" }
+    });
+  }
+  if (andFilters.length === 0) {
+    return baseWhere;
+  }
+  return { ...baseWhere, AND: andFilters };
+};
+
 // Conversion Funnel Report
 router.get(
   "/funnel",
   asyncHandler(async (req, res) => {
     const parsed = dateRangeSchema.safeParse({
       startDate: req.query.startDate,
-      endDate: req.query.endDate
+      endDate: req.query.endDate,
+      state: req.query.state,
+      city: req.query.city
     });
 
     if (!parsed.success) {
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where: Prisma.LeadWhereInput = {
+    const whereBase: Prisma.LeadWhereInput = {
       ...buildLeadAccessWhere(req),
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
+    const where = applyLocationFilters(whereBase, parsed.data.state, parsed.data.city);
 
     const statuses = Object.values(LeadStatus);
     const funnel = await Promise.all(
@@ -77,20 +104,23 @@ router.get(
   asyncHandler(async (req, res) => {
     const parsed = dateRangeSchema.safeParse({
       startDate: req.query.startDate,
-      endDate: req.query.endDate
+      endDate: req.query.endDate,
+      state: req.query.state,
+      city: req.query.city
     });
 
     if (!parsed.success) {
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where: Prisma.LeadWhereInput = {
+    const whereBase: Prisma.LeadWhereInput = {
       ...buildLeadAccessWhere(req),
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
+    const where = applyLocationFilters(whereBase, parsed.data.state, parsed.data.city);
 
     const enrolled = await prisma.lead.count({
       where: { ...where, status: LeadStatus.ENROLLED }
@@ -142,20 +172,27 @@ router.get(
   asyncHandler(async (req, res) => {
     const parsed = dateRangeSchema.safeParse({
       startDate: req.query.startDate,
-      endDate: req.query.endDate
+      endDate: req.query.endDate,
+      state: req.query.state,
+      city: req.query.city
     });
 
     if (!parsed.success) {
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const leadWhereBase: Prisma.LeadWhereInput = {
+    const leadWhereBaseRaw: Prisma.LeadWhereInput = {
       tenantId: req.user!.tenantId,
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
+    const leadWhereBase = applyLocationFilters(
+      leadWhereBaseRaw,
+      parsed.data.state,
+      parsed.data.city
+    );
 
     const messageWhereBase = {
       tenantId: req.user!.tenantId,
@@ -242,20 +279,23 @@ router.get(
   asyncHandler(async (req, res) => {
     const parsed = dateRangeSchema.safeParse({
       startDate: req.query.startDate,
-      endDate: req.query.endDate
+      endDate: req.query.endDate,
+      state: req.query.state,
+      city: req.query.city
     });
 
     if (!parsed.success) {
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where: Prisma.LeadWhereInput = {
+    const whereBase: Prisma.LeadWhereInput = {
       ...buildLeadAccessWhere(req),
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
+    const where = applyLocationFilters(whereBase, parsed.data.state, parsed.data.city);
 
     const leads = await prisma.lead.findMany({
       where,
@@ -313,20 +353,23 @@ router.get(
   asyncHandler(async (req, res) => {
     const parsed = dateRangeSchema.safeParse({
       startDate: req.query.startDate,
-      endDate: req.query.endDate
+      endDate: req.query.endDate,
+      state: req.query.state,
+      city: req.query.city
     });
 
     if (!parsed.success) {
       return res.status(400).json({ errors: parsed.error.flatten() });
     }
 
-    const where: Prisma.LeadWhereInput = {
+    const whereBase: Prisma.LeadWhereInput = {
       ...buildLeadAccessWhere(req),
       createdAt: {
         ...(parsed.data.startDate && { gte: new Date(parsed.data.startDate) }),
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
+    const where = applyLocationFilters(whereBase, parsed.data.state, parsed.data.city);
 
     const priorities = ["COLD", "WARM", "HOT"] as const;
     const distribution = await Promise.all(

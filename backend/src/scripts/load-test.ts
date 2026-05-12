@@ -144,7 +144,7 @@ async function runLoadTest() {
     // ===== BENCHMARK 3: Status Filtering =====
     console.log("\n📌 Benchmark 3: Filtering by status...\n");
 
-    for (const status of ["LEAD" as const, "CONTACTED" as const, "INTERESTED" as const]) {
+    for (const status of ["LEAD" as const, "CONTACTED" as const, "NOT_INTERESTED" as const, "INTERESTED" as const]) {
       const filterStart = Date.now();
       const filtered = await prisma.lead.findMany({
         where: { status: status as any },

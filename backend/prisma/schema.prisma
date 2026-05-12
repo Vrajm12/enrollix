@@ -17,6 +17,7 @@ enum Role {
 enum LeadStatus {
   LEAD
   CONTACTED
+  NOT_INTERESTED
   INTERESTED
   QUALIFIED
   APPLIED
@@ -217,4 +218,27 @@ model SecurityEvent {
   @@index([timestamp])
   @@index([status])
   @@map("security_events")
+}
+
+model ApiRequestLog {
+  id            Int      @id @default(autoincrement())
+  tenantId      Int?     @map("tenant_id")
+  userId        Int?     @map("user_id")
+  method        String
+  path          String
+  statusCode    Int      @map("status_code")
+  durationMs    Int      @map("duration_ms")
+  requestSize   Int?     @map("request_size")
+  responseSize  Int?     @map("response_size")
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  errorMessage  String?  @map("error_message")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([statusCode])
+  @@index([createdAt])
+  @@index([path])
+  @@map("api_request_logs")
 }

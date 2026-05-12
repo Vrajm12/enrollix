@@ -379,7 +379,7 @@ describe('Real User Flow - Complete CRM Workflow (CRITICAL)', () => {
       expect(futureDate > new Date()).toBe(true);
 
       // Checkpoint 4: Before status transition
-      const validStatuses = ['LEAD', 'CONTACTED', 'INTERESTED', 'QUALIFIED', 'APPLIED', 'ENROLLED'];
+      const validStatuses = ['LEAD', 'CONTACTED', 'NOT_INTERESTED', 'INTERESTED', 'QUALIFIED', 'APPLIED', 'ENROLLED'];
       expect(validStatuses).toContain(lead.status);
     });
   });

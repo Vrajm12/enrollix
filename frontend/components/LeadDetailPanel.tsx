@@ -16,7 +16,7 @@ export function LeadDetailPanel({ lead, onClose, loading }: LeadDetailPanelProps
 
   if (!lead) {
     return (
-      <div className="w-96 border-l border-slate-200 bg-white hidden lg:flex flex-col items-center justify-center text-slate-400">
+      <div className="hidden w-96 shrink-0 border-l border-slate-200 bg-white text-slate-400 lg:flex lg:flex-col lg:items-center lg:justify-center">
         <span className="text-4xl mb-2">👤</span>
         <p>Select a lead to view details</p>
       </div>
@@ -24,7 +24,7 @@ export function LeadDetailPanel({ lead, onClose, loading }: LeadDetailPanelProps
   }
 
   return (
-    <div className="w-96 border-l border-slate-200 bg-white flex flex-col max-h-screen hidden lg:flex">
+    <div className="hidden h-full w-96 shrink-0 border-l border-slate-200 bg-white lg:flex lg:flex-col">
       {/* Header */}
       <div className="p-4 border-b border-slate-200 flex items-start justify-between">
         <div className="flex-1">

@@ -5,11 +5,12 @@ import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
 import { ACTIVITY_TYPES, LEAD_STATUSES, SOURCES, COURSES } from "@/lib/constants";
+import { CITIES_BY_STATE, INDIA_STATES } from "@/lib/indiaLocations";
 import { ApiError, api } from "@/lib/api";
 import { clearSession, getToken, getUser, hasSession } from "@/lib/auth";
 import { Activity, ActivityType, Lead, Priority, User } from "@/lib/types";
 import { getPriorityColor, getStatusColor, formatDate, isOverdue } from "@/lib/utils";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Download } from "lucide-react";
 
 type Counselor = {
   id: number;
@@ -61,6 +62,10 @@ export default function LeadDetailPage() {
     const cleaned = lead?.phone?.replace(/[^\d+]/g, "") ?? "";
     return cleaned.startsWith("+") ? cleaned.slice(1) : cleaned;
   }, [lead?.phone]);
+  const cityOptions = useMemo(() => {
+    if (!leadForm.region) return [];
+    return CITIES_BY_STATE[leadForm.region] ?? [];
+  }, [leadForm.region]);
 
   const loadData = async () => {
     if (!leadId || Number.isNaN(leadId)) {
@@ -238,6 +243,40 @@ export default function LeadDetailPage() {
     }
   };
 
+  const onExportActivityExcel = async () => {
+    if (!lead) return;
+    try {
+      const xlsx = await import("xlsx/xlsx.mjs");
+      const rows: Array<Array<string | number>> = [
+        ["Lead Activity Log"],
+        ["Lead Name", lead.name],
+        ["Phone", lead.phone],
+        ["State", lead.region ?? ""],
+        ["City", lead.city ?? ""],
+        [],
+        ["Activity Type", "Notes", "Created At", "Next Follow-up"]
+      ];
+
+      activities.forEach((activity) => {
+        rows.push([
+          activity.type,
+          activity.notes,
+          new Date(activity.createdAt).toLocaleString("en-IN"),
+          new Date(activity.nextFollowUp).toLocaleString("en-IN")
+        ]);
+      });
+
+      const worksheet = xlsx.utils.aoa_to_sheet(rows);
+      worksheet["!cols"] = [{ wch: 18 }, { wch: 45 }, { wch: 24 }, { wch: 24 }];
+      const workbook = xlsx.utils.book_new();
+      xlsx.utils.book_append_sheet(workbook, worksheet, "Activity");
+      const safeName = lead.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      xlsx.writeFile(workbook, `lead-activity-${safeName}.xlsx`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export activity log");
+    }
+  };
+
   if (loading) {
     return <div className="p-6 text-sm text-slate-600">Loading lead...</div>;
   }
@@ -377,30 +416,26 @@ export default function LeadDetailPage() {
                 placeholder="Phone"
                 className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
               />
-              <Select value={leadForm.course} onValueChange={(value) => setLeadForm((current) => ({ ...current, course: value ?? "" }))}>
-                <SelectTrigger className="w-full rounded-md">
-                  <SelectValue placeholder="Select course" />
-                </SelectTrigger>
-                <SelectContent sideOffset={6} align="start" className="z-[120] max-h-64 overflow-y-auto">
-                  {courseOptions.map((course) => (
-                    <SelectItem key={course} value={course}>
-                      {course}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={leadForm.source} onValueChange={(value) => setLeadForm((current) => ({ ...current, source: value ?? "" }))}>
-                <SelectTrigger className="w-full rounded-md">
-                  <SelectValue placeholder="Select source" />
-                </SelectTrigger>
-                <SelectContent sideOffset={6} align="start" className="z-[120] max-h-64 overflow-y-auto">
-                  {SOURCES.map((source) => (
-                    <SelectItem key={source} value={source}>
-                      {source}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={leadForm.course}
+                onChange={(e) => setLeadForm((current) => ({ ...current, course: e.target.value }))}
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              >
+                <option value="">Select course</option>
+                {courseOptions.map((course) => (
+                  <option key={course} value={course}>{course}</option>
+                ))}
+              </select>
+              <select
+                value={leadForm.source}
+                onChange={(e) => setLeadForm((current) => ({ ...current, source: e.target.value }))}
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              >
+                <option value="">Select source</option>
+                {SOURCES.map((source) => (
+                  <option key={source} value={source}>{source}</option>
+                ))}
+              </select>
               <input
                 type="text"
                 value={leadForm.address}
@@ -408,20 +443,33 @@ export default function LeadDetailPage() {
                 placeholder="Address"
                 className="col-span-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 md:col-span-2"
               />
-              <input
-                type="text"
+              <select
                 value={leadForm.region}
-                onChange={(e) => setLeadForm((current) => ({ ...current, region: e.target.value }))}
-                placeholder="Region"
+                onChange={(e) =>
+                  setLeadForm((current) => ({
+                    ...current,
+                    region: e.target.value,
+                    city: e.target.value === current.region ? current.city : ""
+                  }))
+                }
                 className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
-              />
-              <input
-                type="text"
+              >
+                <option value="">Select state</option>
+                {INDIA_STATES.map((state) => (
+                  <option key={state} value={state}>{state}</option>
+                ))}
+              </select>
+              <select
                 value={leadForm.city}
                 onChange={(e) => setLeadForm((current) => ({ ...current, city: e.target.value }))}
-                placeholder="City"
                 className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
-              />
+                disabled={!leadForm.region}
+              >
+                <option value="">{leadForm.region ? "Select city" : "Select state first"}</option>
+                {cityOptions.map((city) => (
+                  <option key={city} value={city}>{city}</option>
+                ))}
+              </select>
               <input
                 type="text"
                 value={leadForm.parentContact}
@@ -444,7 +492,17 @@ export default function LeadDetailPage() {
 
           {/* Activity Timeline */}
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-4 text-base font-semibold text-slate-900">Activity History</h2>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-slate-900">Activity History</h2>
+              <button
+                type="button"
+                onClick={onExportActivityExcel}
+                className="inline-flex items-center gap-2 rounded-md border border-blue-200 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+              >
+                <Download size={14} />
+                Export Excel
+              </button>
+            </div>
             <div className="space-y-3">
               {activities.length === 0 ? (
                 <p className="rounded-md border border-dashed border-slate-200 p-3 text-sm text-slate-500">

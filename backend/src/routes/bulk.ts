@@ -9,6 +9,22 @@ const router = Router();
 const importCsvSchema = z.object({
   csv: z.string().min(1, "CSV content is required")
 });
+const importChunkSchema = z.object({
+  rows: z.array(
+    z.object({
+      name: z.string().trim().min(1),
+      phone: z.string().trim().min(1),
+      email: z.string().trim().email().nullable(),
+      address: z.string().trim().nullable(),
+      parentContact: z.string().trim().nullable(),
+      course: z.string().trim().nullable(),
+      source: z.string().trim().nullable(),
+      status: z.nativeEnum(LeadStatus),
+      priority: z.nativeEnum(Priority),
+      nextFollowUp: z.string().datetime().nullable()
+    })
+  ).min(1).max(200)
+});
 
 const bulkUpdateSchema = z.object({
   leadIds: z.array(z.number().int().positive()).min(1, "Select at least one lead"),
@@ -23,6 +39,10 @@ const bulkUpdateSchema = z.object({
       (value) => Object.values(value).some((field) => field !== undefined),
       "At least one update must be provided"
     )
+});
+
+const bulkDeleteSchema = z.object({
+  leadIds: z.array(z.number().int().positive()).min(1, "Select at least one lead")
 });
 
 const exportSchema = z.object({
@@ -124,7 +144,8 @@ const headerAliases: Record<string, CanonicalHeader> = {
   followup: "next_follow_up"
 };
 
-const requiredHeaders: CanonicalHeader[] = ["name", "phone"];
+const defaultRequiredHeaders: CanonicalHeader[] = ["name", "phone"];
+const dvcoeRequiredHeaders: CanonicalHeader[] = ["name", "phone", "course"];
 
 const exportableColumns = [
   "sr_no",
@@ -258,6 +279,14 @@ const parseNextFollowUp = (value: string | null) => {
     : { value: date.toISOString(), reason: null };
 };
 
+const requiresCourseForTenant = async (tenantId: number) => {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { slug: true }
+  });
+  return tenant?.slug?.toLowerCase() === "dvcoe";
+};
+
 const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAnalysis> => {
   const rows = parseCsv(csv);
   if (rows.length === 0) {
@@ -269,6 +298,9 @@ const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAn
     .map((header) => normalizeHeader(header))
     .filter((header): header is CanonicalHeader => header !== null);
 
+  const requiredHeaders = (await requiresCourseForTenant(tenantId))
+    ? dvcoeRequiredHeaders
+    : defaultRequiredHeaders;
   const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
   if (missingHeaders.length > 0) {
     throw new Error(`Missing required header(s): ${missingHeaders.join(", ")}`);
@@ -297,9 +329,11 @@ const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAn
     const name = getCell("name").trim();
     const phone = getCell("phone").trim();
     const email = nonEmpty(getCell("email"));
+    const course = nonEmpty(getCell("course"));
 
     if (!name) reasons.push("Name is required");
     if (!phone) reasons.push("Phone is required");
+    if (requiredHeaders.includes("course") && !course) reasons.push("Course is required");
 
     if (email && !z.string().email().safeParse(email).success) {
       reasons.push(`Invalid email "${email}"`);
@@ -321,7 +355,7 @@ const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAn
             email,
             address: nonEmpty(getCell("address")) ?? nonEmpty(getCell("location")),
             parentContact: nonEmpty(getCell("parent_contact")),
-            course: nonEmpty(getCell("course")),
+            course,
             source: nonEmpty(getCell("source")),
             status: parsedStatus.value ?? LeadStatus.LEAD,
             priority: parsedPriority.value ?? Priority.COLD,
@@ -543,6 +577,77 @@ router.post(
   })
 );
 
+router.post(
+  "/import/csv/chunk",
+  asyncHandler(async (req, res) => {
+    const parsed = importChunkSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Invalid import chunk payload",
+        errors: parsed.error.flatten()
+      });
+    }
+
+    const requireCourse = await requiresCourseForTenant(req.user!.tenantId);
+    const created = [];
+    const skipped = [];
+    let rowIndex = 0;
+
+    for (const row of parsed.data.rows) {
+      rowIndex += 1;
+      if (requireCourse && !row.course?.trim()) {
+        skipped.push({
+          rowNumber: rowIndex,
+          name: row.name,
+          reason: 'Course is required for this tenant'
+        });
+        continue;
+      }
+      try {
+        const lead = await prisma.lead.create({
+          data: {
+            tenantId: req.user!.tenantId,
+            name: row.name,
+            phone: row.phone,
+            email: row.email,
+            address: row.address,
+            parentContact: row.parentContact,
+            course: row.course,
+            source: row.source,
+            status: row.status,
+            priority: row.priority,
+            nextFollowUp: row.nextFollowUp ? new Date(row.nextFollowUp) : null,
+            assignedTo: req.user?.role === Role.COUNSELOR ? req.user.id : null
+          },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            status: true,
+            priority: true
+          }
+        });
+        created.push(lead);
+      } catch (error) {
+        skipped.push({
+          rowNumber: rowIndex,
+          name: row.name,
+          reason: error instanceof Error ? error.message : "Unknown import error"
+        });
+      }
+    }
+
+    return res.status(201).json({
+      message: `Imported ${created.length} lead${created.length === 1 ? "" : "s"} in this chunk`,
+      createdCount: created.length,
+      skippedCount: skipped.length,
+      created,
+      skipped
+    });
+  })
+);
+
 router.patch(
   "/leads",
   asyncHandler(async (req, res) => {
@@ -616,6 +721,37 @@ router.patch(
       updatedCount: result.count,
       requestedCount: leadIds.length,
       ignoredCount: leadIds.length - matchedLeadIds.length
+    });
+  })
+);
+
+router.delete(
+  "/leads/delete",
+  asyncHandler(async (req, res) => {
+    if (req.user?.role !== Role.TENANT_ADMIN && req.user?.role !== Role.SUPER_ADMIN) {
+      return res.status(403).json({ message: "Only tenant admins can delete leads in bulk" });
+    }
+
+    const parsed = bulkDeleteSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        message: "Invalid bulk delete payload",
+        errors: parsed.error.flatten()
+      });
+    }
+
+    const leadIds = Array.from(new Set(parsed.data.leadIds));
+    const result = await prisma.lead.deleteMany({
+      where: {
+        tenantId: req.user!.tenantId,
+        id: { in: leadIds }
+      }
+    });
+
+    return res.json({
+      message: "Leads deleted successfully",
+      deletedCount: result.count,
+      requestedCount: leadIds.length
     });
   })
 );

@@ -3,7 +3,11 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = (process.argv[2] || "admin@crm.local").toLowerCase().trim();
+  const emailArg = process.argv[2];
+  if (!emailArg?.trim()) {
+    throw new Error("Usage: npm run promote:superadmin -- <email>");
+  }
+  const email = emailArg.toLowerCase().trim();
 
   const user = await prisma.user.findFirst({
     where: { email }
