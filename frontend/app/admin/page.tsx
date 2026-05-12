@@ -164,8 +164,16 @@ async function fetchMonitoring(hours = 24) {
 }
 
 async function fetchRequestLogs(hours = 24, limit = 150) {
-  const data = await authFetch(`/admin/monitoring/requests?hours=${hours}&limit=${limit}`);
-  return data.requests as RequestLog[];
+  try {
+    const data = await authFetch(`/admin/monitoring/requests?hours=${hours}&limit=${limit}`);
+    return data.requests as RequestLog[];
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('/admin/monitoring/requests') || message.toLowerCase().includes('route not found')) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 export default function AdminPage() {
@@ -186,6 +194,7 @@ export default function AdminPage() {
   const [endpointUsage, setEndpointUsage] = useState<EndpointUsage[]>([]);
   const [latestErrors, setLatestErrors] = useState<RequestLog[]>([]);
   const [requestLogs, setRequestLogs] = useState<RequestLog[]>([]);
+  const [requestLogsUnavailable, setRequestLogsUnavailable] = useState(false);
 
   const [tenantEditName, setTenantEditName] = useState<Record<number, string>>({});
   const [userEditName, setUserEditName] = useState<Record<number, string>>({});
@@ -223,17 +232,24 @@ export default function AdminPage() {
   const initialize = async () => {
     try {
       setLoading(true);
-      const [tenantData, monitoringData, logs] = await Promise.all([
+      const [tenantData, monitoringData, logsResult] = await Promise.all([
         fetchTenants(),
         fetchMonitoring(monitoringHours),
-        fetchRequestLogs(monitoringHours)
+        fetchRequestLogs(monitoringHours).then((logs) => ({ logs, unavailable: false })).catch((err) => {
+          const message = err instanceof Error ? err.message : '';
+          if (message.includes('/admin/monitoring/requests') || message.toLowerCase().includes('route not found')) {
+            return { logs: [] as RequestLog[], unavailable: true };
+          }
+          throw err;
+        })
       ]);
       setTenants(tenantData);
       setMonitoringOverview(monitoringData.overview);
       setTenantUsage(monitoringData.mostUsedTenants);
       setEndpointUsage(monitoringData.topEndpoints);
       setLatestErrors(monitoringData.latestErrors);
-      setRequestLogs(logs);
+      setRequestLogs(logsResult.logs);
+      setRequestLogsUnavailable(logsResult.unavailable);
       setError('');
     } catch (err: any) {
       setError(err.message || 'Failed to initialize superadmin dashboard');
@@ -256,15 +272,22 @@ export default function AdminPage() {
   const refreshMonitoring = async () => {
     try {
       setMonitoringLoading(true);
-      const [monitoringData, logs] = await Promise.all([
+      const [monitoringData, logsResult] = await Promise.all([
         fetchMonitoring(monitoringHours),
-        fetchRequestLogs(monitoringHours)
+        fetchRequestLogs(monitoringHours).then((logs) => ({ logs, unavailable: false })).catch((err) => {
+          const message = err instanceof Error ? err.message : '';
+          if (message.includes('/admin/monitoring/requests') || message.toLowerCase().includes('route not found')) {
+            return { logs: [] as RequestLog[], unavailable: true };
+          }
+          throw err;
+        })
       ]);
       setMonitoringOverview(monitoringData.overview);
       setTenantUsage(monitoringData.mostUsedTenants);
       setEndpointUsage(monitoringData.topEndpoints);
       setLatestErrors(monitoringData.latestErrors);
-      setRequestLogs(logs);
+      setRequestLogs(logsResult.logs);
+      setRequestLogsUnavailable(logsResult.unavailable);
       setError('');
     } catch (err: any) {
       setError(err.message || 'Failed to load monitoring data');
@@ -684,6 +707,11 @@ export default function AdminPage() {
 
         <section className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Detailed Request Logs</h2>
+          {requestLogsUnavailable ? (
+            <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              Detailed request log endpoint is not available on this backend version.
+            </div>
+          ) : null}
           <div className="overflow-x-auto border rounded">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-100 text-gray-700">
