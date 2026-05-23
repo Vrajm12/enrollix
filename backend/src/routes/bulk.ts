@@ -8,6 +8,7 @@ import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { env } from "../config.js";
 import { resolveTenantSlugFromRequest } from "../utils/tenantSlug.js";
+import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
 
 const router = Router();
 const MAX_UPLOAD_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
@@ -797,6 +798,7 @@ router.post(
       }
 
       const skippedCount = Math.max(0, readyRows.length - createdCount) + skipped.length;
+      invalidateDashboardSummaryCache(req.user!.tenantId);
 
       return res.status(201).json({
         message: `Imported ${createdCount} lead${createdCount === 1 ? "" : "s"}`,
@@ -807,6 +809,7 @@ router.post(
         created: [],
         skipped
       });
+      
     } catch (error) {
       return res.status(400).json({
         message: error instanceof Error ? error.message : "Unable to import CSV"
@@ -882,6 +885,7 @@ router.post(
       }
     }
 
+    invalidateDashboardSummaryCache(req.user!.tenantId);
     return res.status(201).json({
       message: `Imported ${createdCount} lead${createdCount === 1 ? "" : "s"} in this chunk`,
       createdCount,
@@ -959,6 +963,7 @@ router.patch(
       },
       data: updateData
     });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.json({
       message: `Updated ${result.count} lead${result.count === 1 ? "" : "s"}`,
@@ -991,6 +996,7 @@ router.delete(
         id: { in: leadIds }
       }
     });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.json({
       message: "Leads deleted successfully",

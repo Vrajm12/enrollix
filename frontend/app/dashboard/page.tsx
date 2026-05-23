@@ -26,10 +26,17 @@ type TimelineActivityType = "call" | "whatsapp" | "email" | "note" | "status";
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [todayFollowups, setTodayFollowups] = useState<Lead[]>([]);
-  const [missedFollowups, setMissedFollowups] = useState<Lead[]>([]);
-  const [counselors, setCounselors] = useState<Counselor[]>([]);
+  const [summary, setSummary] = useState<{
+    totalLeads: number;
+    enrolledCount: number;
+    hotCount: number;
+    todayFollowups: number;
+    missedFollowups: number;
+    upcomingFollowups: number;
+    closedThisWeek: number;
+    statusCounts: Record<string, number>;
+    priorityCounts: Record<string, number>;
+  } | null>(null);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
   
   const [loading, setLoading] = useState(true);
@@ -42,17 +49,11 @@ export default function DashboardPage() {
 
   const loadDashboardData = async () => {
     try {
-      const [leadList, todayList, missedList, counselorList, activities] = await Promise.all([
-        api.getLeads(),
-        api.getTodayFollowups(),
-        api.getMissedFollowups(),
-        api.getCounselors(),
+      const [dashboardSummary, activities] = await Promise.all([
+        api.getDashboardSummary(),
         api.getRecentActivities().catch(() => []),
       ]);
-      setLeads(leadList);
-      setTodayFollowups(todayList);
-      setMissedFollowups(missedList);
-      setCounselors(counselorList);
+      setSummary(dashboardSummary);
       setRecentActivities(activities);
       setError(null);
     } catch (err) {
@@ -157,66 +158,13 @@ export default function DashboardPage() {
     return "note";
   };
 
-  const weekStart = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now);
-    const day = start.getDay(); // 0=Sun
-    const diffToMonday = day === 0 ? 6 : day - 1;
-    start.setDate(start.getDate() - diffToMonday);
-    start.setHours(0, 0, 0, 0);
-    return start;
-  }, []);
-
-  const closedThisWeek = useMemo(
-    () =>
-      leads.filter(
-        (lead) =>
-          lead.status === "ENROLLED" &&
-          lead.updatedAt &&
-          new Date(lead.updatedAt) >= weekStart
-      ).length,
-    [leads, weekStart]
-  );
-
-  const avgResponseLabel = useMemo(() => {
-    const responseHours = leads
-      .filter((lead) => lead.createdAt && lead.nextFollowUp)
-      .map((lead) => {
-        const created = new Date(lead.createdAt).getTime();
-        const nextFollow = new Date(lead.nextFollowUp as string).getTime();
-        const diffHours = (nextFollow - created) / (1000 * 60 * 60);
-        return Number.isFinite(diffHours) && diffHours >= 0 ? diffHours : null;
-      })
-      .filter((value): value is number => value !== null);
-
-    if (responseHours.length === 0) return "N/A";
-
-    const avgHours =
-      responseHours.reduce((sum, value) => sum + value, 0) / responseHours.length;
-
-    if (avgHours < 1) {
-      return `${Math.max(1, Math.round(avgHours * 60))}m`;
-    }
-    if (avgHours < 24) {
-      return `${avgHours.toFixed(1)}h`;
-    }
-    return `${(avgHours / 24).toFixed(1)}d`;
-  }, [leads]);
-
-  const upcomingFollowupsCount = useMemo(() => {
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-    return leads.filter((lead) => {
-      if (!lead.nextFollowUp) return false;
-      return new Date(lead.nextFollowUp) > endOfToday;
-    }).length;
-  }, [leads]);
+  const avgResponseLabel = "N/A";
 
   const followupHealthScore = useMemo(() => {
-    const due = todayFollowups.length + missedFollowups.length;
+    const due = (summary?.todayFollowups ?? 0) + (summary?.missedFollowups ?? 0);
     if (due === 0) return 100;
-    return Math.max(0, Math.round((todayFollowups.length / due) * 100));
-  }, [todayFollowups.length, missedFollowups.length]);
+    return Math.max(0, Math.round(((summary?.todayFollowups ?? 0) / due) * 100));
+  }, [summary?.todayFollowups, summary?.missedFollowups]);
 
   if (loading) {
     return (
@@ -263,7 +211,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                 <ModernKPICard
                   title="Total Leads"
-                  value={leads.length}
+                  value={summary?.totalLeads ?? 0}
                   trend={12}
                   subtitle="Active leads in pipeline"
                   icon={<Users size={24} />}
@@ -273,8 +221,8 @@ export default function DashboardPage() {
                 <ModernKPICard
                   title="Conversion Rate"
                   value={
-                    leads.length > 0
-                      ? ((leads.filter((l) => l.status === "ENROLLED").length / leads.length) * 100).toFixed(1) + "%"
+                    (summary?.totalLeads ?? 0) > 0
+                      ? (((summary?.enrolledCount ?? 0) / (summary?.totalLeads ?? 1)) * 100).toFixed(1) + "%"
                       : "0.0%"
                   }
                   trend={5}
@@ -284,7 +232,7 @@ export default function DashboardPage() {
                 />
                 <ModernKPICard
                   title="Hot Leads"
-                  value={leads.filter((l) => l.priority === "HOT").length}
+                  value={summary?.hotCount ?? 0}
                   trend={-3}
                   icon={<Target size={24} />}
                   color="cyan"
@@ -292,11 +240,11 @@ export default function DashboardPage() {
                 />
                 <ModernKPICard
                   title="Follow-ups Today"
-                  value={todayFollowups.length}
+                  value={summary?.todayFollowups ?? 0}
                   trend={8}
                   icon={<Zap size={24} />}
                   color="sky"
-                  comparison={`${missedFollowups.length} missed`}
+                  comparison={`${summary?.missedFollowups ?? 0} missed`}
                 />
               </div>
 
@@ -306,12 +254,12 @@ export default function DashboardPage() {
                 <div className="lg:col-span-2">
                   <LeadFunnel
                     stages={[
-                      { name: 'Lead', count: leads.filter(l => l.status === 'LEAD').length, color: 'bg-blue-500' },
-                      { name: 'Contacted', count: leads.filter(l => l.status === 'CONTACTED').length, color: 'bg-blue-400' },
-                      { name: 'Not Interested', count: leads.filter(l => l.status === 'NOT_INTERESTED').length, color: 'bg-rose-400' },
-                      { name: 'Interested', count: leads.filter(l => l.status === 'INTERESTED').length, color: 'bg-cyan-400' },
-                      { name: 'Qualified', count: leads.filter(l => l.status === 'QUALIFIED').length, color: 'bg-teal-400' },
-                      { name: 'Enrolled', count: leads.filter(l => l.status === 'ENROLLED').length, color: 'bg-green-500' },
+                      { name: 'Lead', count: summary?.statusCounts?.LEAD ?? 0, color: 'bg-blue-500' },
+                      { name: 'Contacted', count: summary?.statusCounts?.CONTACTED ?? 0, color: 'bg-blue-400' },
+                      { name: 'Not Interested', count: summary?.statusCounts?.NOT_INTERESTED ?? 0, color: 'bg-rose-400' },
+                      { name: 'Interested', count: summary?.statusCounts?.INTERESTED ?? 0, color: 'bg-cyan-400' },
+                      { name: 'Qualified', count: summary?.statusCounts?.QUALIFIED ?? 0, color: 'bg-teal-400' },
+                      { name: 'Enrolled', count: summary?.statusCounts?.ENROLLED ?? 0, color: 'bg-green-500' },
                     ]}
                   />
                 </div>
@@ -327,15 +275,15 @@ export default function DashboardPage() {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between rounded-lg bg-blue-50 px-4 py-3">
                         <span className="text-sm font-medium text-slate-700">Due Today</span>
-                        <span className="text-lg font-bold text-blue-700">{todayFollowups.length}</span>
+                        <span className="text-lg font-bold text-blue-700">{summary?.todayFollowups ?? 0}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-lg bg-red-50 px-4 py-3">
                         <span className="text-sm font-medium text-slate-700">Missed</span>
-                        <span className="text-lg font-bold text-red-600">{missedFollowups.length}</span>
+                        <span className="text-lg font-bold text-red-600">{summary?.missedFollowups ?? 0}</span>
                       </div>
                       <div className="flex items-center justify-between rounded-lg bg-cyan-50 px-4 py-3">
                         <span className="text-sm font-medium text-slate-700">Upcoming</span>
-                        <span className="text-lg font-bold text-cyan-700">{upcomingFollowupsCount}</span>
+                        <span className="text-lg font-bold text-cyan-700">{summary?.upcomingFollowups ?? 0}</span>
                       </div>
                     </div>
 
@@ -387,9 +335,9 @@ export default function DashboardPage() {
                   
                   <div className="space-y-5">
                     {[
-                      { name: 'HOT', count: leads.filter(l => l.priority === 'HOT').length, color: 'bg-red-100', textColor: 'text-red-700', bar: 'bg-red-500' },
-                      { name: 'WARM', count: leads.filter(l => l.priority === 'WARM').length, color: 'bg-cyan-100', textColor: 'text-cyan-700', bar: 'bg-cyan-500' },
-                      { name: 'COLD', count: leads.filter(l => l.priority === 'COLD').length, color: 'bg-blue-100', textColor: 'text-blue-700', bar: 'bg-blue-500' },
+                      { name: 'HOT', count: summary?.priorityCounts?.HOT ?? 0, color: 'bg-red-100', textColor: 'text-red-700', bar: 'bg-red-500' },
+                      { name: 'WARM', count: summary?.priorityCounts?.WARM ?? 0, color: 'bg-cyan-100', textColor: 'text-cyan-700', bar: 'bg-cyan-500' },
+                      { name: 'COLD', count: summary?.priorityCounts?.COLD ?? 0, color: 'bg-blue-100', textColor: 'text-blue-700', bar: 'bg-blue-500' },
                     ].map((priority) => (
                       <div key={priority.name}>
                         <div className="flex items-center justify-between mb-2">
@@ -401,7 +349,7 @@ export default function DashboardPage() {
                         <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden">
                           <div
                             className={`h-full ${priority.bar} transition-all duration-300`}
-                            style={{ width: `${(priority.count / (leads.length > 0 ? leads.length : 1)) * 100}%` }}
+                            style={{ width: `${(priority.count / ((summary?.totalLeads ?? 0) > 0 ? (summary?.totalLeads ?? 1) : 1)) * 100}%` }}
                           />
                         </div>
                       </div>
@@ -418,7 +366,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-sm text-slate-600">Closed This Week</span>
-                        <span className="font-semibold text-slate-900">{closedThisWeek}</span>
+                        <span className="font-semibold text-slate-900">{summary?.closedThisWeek ?? 0}</span>
                       </div>
                     </div>
                   </div>

@@ -17,7 +17,8 @@ export function LeadListContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
+  const [totalLeads, setTotalLeads] = useState(0);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,9 @@ export function LeadListContent() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [tenantCourseOptions, setTenantCourseOptions] = useState<string[]>([]);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     const user = getUser();
@@ -52,12 +56,19 @@ export function LeadListContent() {
   const loadLeads = async () => {
     setLoading(true);
     try {
-      const response = await api.getLeads({
+      const response = await api.getLeadsPage({
         state: stateFilter || undefined,
         city: cityFilter || undefined,
-        course: courseFilter || undefined
+        course: courseFilter || undefined,
+        status: activeTab === "ALL" ? undefined : activeTab,
+        search: searchTerm || undefined,
+        page,
+        pageSize
       });
-      setLeads(response || []);
+      setLeads(response.items || []);
+      setTotalLeads(response.total || 0);
+      setStatusCounts(response.counts || {});
+      setTotalPages(response.totalPages || 1);
       setSelectedLeadIds([]);
       setError(null);
     } catch (err) {
@@ -74,28 +85,7 @@ export function LeadListContent() {
 
   useEffect(() => {
     void loadLeads();
-  }, [stateFilter, cityFilter, courseFilter]);
-
-  useEffect(() => {
-    let filtered = leads;
-
-    if (activeTab !== "ALL") {
-      filtered = filtered.filter((lead) => lead.status === activeTab);
-    }
-
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (lead) =>
-          lead.name.toLowerCase().includes(term) ||
-          lead.phone.toLowerCase().includes(term) ||
-          lead.email?.toLowerCase().includes(term) ||
-          lead.course?.toLowerCase().includes(term)
-      );
-    }
-
-    setFilteredLeads(filtered);
-  }, [leads, activeTab, searchTerm, selectedLead]);
+  }, [stateFilter, cityFilter, courseFilter, activeTab, searchTerm, page, pageSize]);
 
   const openFilterPopup = () => {
     setDraftStateFilter(stateFilter);
@@ -108,6 +98,7 @@ export function LeadListContent() {
     setStateFilter(draftStateFilter.trim());
     setCityFilter(draftCityFilter.trim());
     setCourseFilter(draftCourseFilter.trim());
+    setPage(1);
     setShowFilterPopup(false);
   };
 
@@ -118,6 +109,7 @@ export function LeadListContent() {
     setStateFilter("");
     setCityFilter("");
     setCourseFilter("");
+    setPage(1);
     setShowFilterPopup(false);
   };
 
@@ -128,20 +120,20 @@ export function LeadListContent() {
   };
 
   const allFilteredSelected =
-    filteredLeads.length > 0 && filteredLeads.every((lead) => selectedLeadIds.includes(lead.id));
+    leads.length > 0 && leads.every((lead) => selectedLeadIds.includes(lead.id));
   const draftCityOptions = draftStateFilter ? (CITIES_BY_STATE[draftStateFilter] ?? []) : [];
   const courseOptions = tenantCourseOptions;
 
   const toggleSelectAllFiltered = () => {
     if (allFilteredSelected) {
-      const filteredIds = new Set(filteredLeads.map((lead) => lead.id));
+      const filteredIds = new Set(leads.map((lead) => lead.id));
       setSelectedLeadIds((current) => current.filter((id) => !filteredIds.has(id)));
       return;
     }
 
     setSelectedLeadIds((current) => {
       const merged = new Set(current);
-      filteredLeads.forEach((lead) => merged.add(lead.id));
+      leads.forEach((lead) => merged.add(lead.id));
       return Array.from(merged);
     });
   };
@@ -203,7 +195,10 @@ export function LeadListContent() {
               type="text"
               placeholder="Search by name, phone, email, or course..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
               className="w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {(stateFilter || cityFilter || courseFilter) && (
@@ -280,22 +275,24 @@ export function LeadListContent() {
               <button
                 onClick={() => {
                   setActiveTab("ALL");
+                  setPage(1);
                   setSelectedLead(null);
                 }}
                 className={`px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition-colors ${
                   activeTab === "ALL" ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-700 hover:bg-blue-100"
                 }`}
               >
-                All ({leads.length})
+                All ({Object.values(statusCounts).reduce((sum, count) => sum + count, 0)})
               </button>
 
               {LEAD_STATUSES.map((status) => {
-                const count = leads.filter((l) => l.status === status.value).length;
+                const count = statusCounts[status.value] ?? 0;
                 return (
                   <button
                     key={status.value}
                     onClick={() => {
                       setActiveTab(status.value);
+                      setPage(1);
                       setSelectedLead(null);
                     }}
                     className={`px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap transition-colors ${
@@ -343,14 +340,14 @@ export function LeadListContent() {
               <div className="flex items-center justify-center h-64">
                 <p className="text-slate-500">Loading leads...</p>
               </div>
-            ) : filteredLeads.length === 0 ? (
+            ) : leads.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-slate-500">
                 <span className="text-4xl mb-2">No leads</span>
                 <p>{searchTerm ? "No leads match your search" : "No leads found"}</p>
               </div>
             ) : (
               <div className="p-4 md:p-6 space-y-2">
-                {filteredLeads.map((lead) => (
+                {leads.map((lead) => (
                   <div
                     key={lead.id}
                     onClick={() => {
@@ -414,6 +411,33 @@ export function LeadListContent() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            {!loading && totalPages > 1 && (
+              <div className="px-4 md:px-6 pb-6">
+                <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-sm text-slate-600">
+                    Page {page} of {totalPages} • {totalLeads} lead(s)
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      onClick={() => setPage((value) => Math.max(value - 1, 1))}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      type="button"
+                      disabled={page >= totalPages}
+                      onClick={() => setPage((value) => Math.min(value + 1, totalPages))}
+                      className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

@@ -2,6 +2,7 @@ import { Role } from "@prisma/client";
 import { Request, Router } from "express";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { getDashboardSummaryCache, setDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
 
 const router = Router();
 
@@ -17,6 +18,74 @@ const buildLeadAccessWhere = (req: Request) => {
 
   return tenantFilter;
 };
+
+router.get(
+  "/summary",
+  asyncHandler(async (req, res) => {
+    const accessWhere = buildLeadAccessWhere(req);
+    const tenantId = req.user!.tenantId;
+    const cached = getDashboardSummaryCache<{
+      totalLeads: number;
+      enrolledCount: number;
+      hotCount: number;
+      todayFollowups: number;
+      missedFollowups: number;
+      upcomingFollowups: number;
+      closedThisWeek: number;
+      statusCounts: Record<string, number>;
+      priorityCounts: Record<string, number>;
+    }>(tenantId);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const weekStart = new Date(today);
+    const day = weekStart.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    weekStart.setDate(weekStart.getDate() - diffToMonday);
+
+    const [totalLeads, enrolledCount, hotCount, todayFollowups, missedFollowups, upcomingFollowups, closedThisWeek, statusGroup, priorityGroup] = await Promise.all([
+      prisma.lead.count({ where: accessWhere }),
+      prisma.lead.count({ where: { ...accessWhere, status: "ENROLLED" } }),
+      prisma.lead.count({ where: { ...accessWhere, priority: "HOT" } }),
+      prisma.lead.count({ where: { ...accessWhere, nextFollowUp: { gte: today, lt: tomorrow } } }),
+      prisma.lead.count({ where: { ...accessWhere, nextFollowUp: { lt: today } } }),
+      prisma.lead.count({ where: { ...accessWhere, nextFollowUp: { gt: tomorrow } } }),
+      prisma.lead.count({ where: { ...accessWhere, status: "ENROLLED", updatedAt: { gte: weekStart } } }),
+      prisma.lead.groupBy({ by: ["status"], where: accessWhere, _count: { _all: true } }),
+      prisma.lead.groupBy({ by: ["priority"], where: accessWhere, _count: { _all: true } })
+    ]);
+
+    const statusCounts = statusGroup.reduce<Record<string, number>>((acc, row) => {
+      acc[row.status] = row._count._all;
+      return acc;
+    }, {});
+    const priorityCounts = priorityGroup.reduce<Record<string, number>>((acc, row) => {
+      acc[row.priority] = row._count._all;
+      return acc;
+    }, {});
+
+    const payload = {
+      totalLeads,
+      enrolledCount,
+      hotCount,
+      todayFollowups,
+      missedFollowups,
+      upcomingFollowups,
+      closedThisWeek,
+      statusCounts,
+      priorityCounts
+    };
+
+    setDashboardSummaryCache(tenantId, payload);
+    return res.json(payload);
+  })
+);
 
 // Get today's follow-ups
 router.get(

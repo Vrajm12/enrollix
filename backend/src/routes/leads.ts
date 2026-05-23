@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { validateResourceTenant, validateUserTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
 
 const router = Router();
 
@@ -52,6 +53,15 @@ const parseLeadId = (idParam: string) => {
 router.get(
   "/",
   asyncHandler(async (req, res) => {
+    const paginated = String(req.query.paginated ?? "").toLowerCase() === "true";
+    const cursorRaw = typeof req.query.cursor === "string" ? req.query.cursor : "";
+    const cursorId = cursorRaw ? Number(cursorRaw) : null;
+    const validCursor = cursorId && Number.isFinite(cursorId) && cursorId > 0 ? cursorId : null;
+    const page = Math.max(Number(req.query.page ?? 1) || 1, 1);
+    const pageSizeRaw = Number(req.query.pageSize ?? 50) || 50;
+    const pageSize = Math.min(Math.max(pageSizeRaw, 1), 200);
+    const statusQuery = typeof req.query.status === "string" ? req.query.status.trim().toUpperCase() : "";
+    const searchQuery = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const stateQuery =
       typeof req.query.state === "string"
         ? req.query.state.trim()
@@ -97,24 +107,102 @@ router.get(
       });
     }
 
+    if (searchQuery) {
+      andFilters.push({
+        OR: [
+          { name: { contains: searchQuery, mode: "insensitive" } },
+          { phone: { contains: searchQuery, mode: "insensitive" } },
+          { email: { contains: searchQuery, mode: "insensitive" } },
+          { course: { contains: searchQuery, mode: "insensitive" } }
+        ]
+      });
+    }
+
     if (andFilters.length > 0) {
       where.AND = andFilters;
     }
 
-    const leads = await prisma.lead.findMany({
-      where,
-      include: {
-        assignedCounselor: {
-          select: { id: true, name: true, email: true }
-        },
-        _count: {
-          select: { activities: true }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+    const statusWhere =
+      statusQuery && Object.values(LeadStatus).includes(statusQuery as LeadStatus)
+        ? { ...where, status: statusQuery as LeadStatus }
+        : where;
 
-    return res.json(leads);
+    if (!paginated) {
+      const leads = await prisma.lead.findMany({
+        where: statusWhere,
+        include: {
+          assignedCounselor: {
+            select: { id: true, name: true, email: true }
+          },
+          _count: {
+            select: { activities: true }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+      return res.json(leads);
+    }
+
+    const [items, total, groupedCounts] = await Promise.all([
+      prisma.lead.findMany({
+        where: statusWhere,
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          address: true,
+          region: true,
+          city: true,
+          parentContact: true,
+          course: true,
+          source: true,
+          status: true,
+          priority: true,
+          nextFollowUp: true,
+          assignedTo: true,
+          assignedCounselor: {
+            select: { id: true, name: true, email: true }
+          },
+          createdAt: true,
+          updatedAt: true
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        ...(validCursor
+          ? {
+              cursor: { id: validCursor },
+              skip: 1,
+              take: pageSize
+            }
+          : {
+              skip: (page - 1) * pageSize,
+              take: pageSize
+            })
+      }),
+      prisma.lead.count({ where: statusWhere }),
+      prisma.lead.groupBy({
+        by: ["status"],
+        where,
+        _count: { _all: true }
+      })
+    ]);
+
+    const counts = groupedCounts.reduce<Record<string, number>>((acc, row) => {
+      acc[row.status] = row._count._all;
+      return acc;
+    }, {});
+
+    const nextCursor = items.length === pageSize ? items[items.length - 1]?.id ?? null : null;
+
+    return res.json({
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(Math.ceil(total / pageSize), 1),
+      counts,
+      nextCursor
+    });
   })
 );
 
@@ -141,6 +229,7 @@ router.delete(
         id: { in: leadIds }
       }
     });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.json({
       message: "Leads deleted successfully",
@@ -238,6 +327,7 @@ router.post(
         }
       }
     });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.status(201).json(created);
   })
@@ -317,6 +407,7 @@ router.put(
         }
       }
     });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.json(updated);
   })
@@ -362,6 +453,7 @@ router.patch(
       where: { id: leadId },
       data: { status: parsed.data.status }
     });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.json(updated);
   })
@@ -407,6 +499,7 @@ router.patch(
       where: { id: leadId },
       data: { priority: parsed.data.priority }
     });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.json(updated);
   })
@@ -452,6 +545,7 @@ router.patch(
       where: { id: leadId },
       data: { nextFollowUp: new Date(parsed.data.nextFollowUp) }
     });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.json(updated);
   })
