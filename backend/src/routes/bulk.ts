@@ -1,6 +1,8 @@
 import { LeadStatus, Priority, Role } from "@prisma/client";
 import { Router } from "express";
+import { Readable } from "node:stream";
 import multer from "multer";
+import csvParser from "csv-parser";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -8,7 +10,18 @@ import { env } from "../config.js";
 import { resolveTenantSlugFromRequest } from "../utils/tenantSlug.js";
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const MAX_UPLOAD_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
+const MAX_UPLOAD_ROWS = 50_000;
+const MAX_PREVIEW_ROWS = 1_000;
+const DB_WRITE_CHUNK_SIZE = 1_000;
+const DUPLICATE_LOOKUP_CHUNK_SIZE = 1_000;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_UPLOAD_FILE_SIZE_BYTES,
+    files: 1
+  }
+});
 
 const importCsvSchema = z.object({
   csv: z.string().min(1, "CSV content is required")
@@ -27,7 +40,7 @@ const importChunkSchema = z.object({
       priority: z.nativeEnum(Priority),
       nextFollowUp: z.string().datetime().nullable()
     })
-  ).min(1).max(200)
+  ).min(1).max(DB_WRITE_CHUNK_SIZE)
 });
 
 const bulkUpdateSchema = z.object({
@@ -100,12 +113,15 @@ type PreviewRow = {
 type ImportAnalysis = {
   headers: CanonicalHeader[];
   rows: PreviewRow[];
+  readyRows: ParsedImportRow[];
   summary: {
     totalRows: number;
     readyRows: number;
     duplicateRows: number;
     errorRows: number;
   };
+  rowsTruncated: boolean;
+  maxPreviewRows: number;
 };
 
 const headerAliases: Record<string, CanonicalHeader> = {
@@ -184,70 +200,6 @@ const normalizeHeader = (header: string): CanonicalHeader | null => {
   return headerAliases[canonical] ?? null;
 };
 
-const parseCsv = (input: string): string[][] => {
-  const csv = input.replace(/^\uFEFF/, "");
-  const rows: string[][] = [];
-  let currentRow: string[] = [];
-  let currentField = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < csv.length; index += 1) {
-    const char = csv[index];
-    const nextChar = csv[index + 1];
-
-    if (inQuotes) {
-      if (char === '"' && nextChar === '"') {
-        currentField += '"';
-        index += 1;
-      } else if (char === '"') {
-        inQuotes = false;
-      } else {
-        currentField += char;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      inQuotes = true;
-      continue;
-    }
-
-    if (char === ",") {
-      currentRow.push(currentField);
-      currentField = "";
-      continue;
-    }
-
-    if (char === "\r") {
-      if (nextChar === "\n") {
-        continue;
-      }
-      currentRow.push(currentField);
-      rows.push(currentRow);
-      currentRow = [];
-      currentField = "";
-      continue;
-    }
-
-    if (char === "\n") {
-      currentRow.push(currentField);
-      rows.push(currentRow);
-      currentRow = [];
-      currentField = "";
-      continue;
-    }
-
-    currentField += char;
-  }
-
-  currentRow.push(currentField);
-  rows.push(currentRow);
-
-  return rows
-    .map((row) => row.map((field) => field.trim()))
-    .filter((row) => row.some((field) => field.length > 0));
-};
-
 const toCsvValue = (value: string | number | null | undefined) => {
   const stringValue = value == null ? "" : String(value);
   if (/[",\n]/.test(stringValue)) {
@@ -291,41 +243,100 @@ const requiresCourseForTenant = async (tenantId: number) => {
   return tenant?.slug?.toLowerCase() === "dvcoe";
 };
 
-const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAnalysis> => {
-  const rows = parseCsv(csv);
-  if (rows.length === 0) {
-    throw new Error("CSV file is empty");
+const chunkArray = <T>(items: T[], chunkSize: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += chunkSize) {
+    chunks.push(items.slice(index, index + chunkSize));
+  }
+  return chunks;
+};
+
+const findExistingLeadMatches = async (tenantId: number, phones: string[], emails: string[]) => {
+  const existingByPhone = new Map<string, { name: string }>();
+  const existingByEmail = new Map<string, { name: string }>();
+
+  const phoneChunks = chunkArray(phones, DUPLICATE_LOOKUP_CHUNK_SIZE);
+  for (const phoneChunk of phoneChunks) {
+    // eslint-disable-next-line no-await-in-loop
+    const existing = await prisma.lead.findMany({
+      where: { tenantId, phone: { in: phoneChunk } },
+      select: { phone: true, name: true }
+    });
+    existing.forEach((lead) => existingByPhone.set(lead.phone, { name: lead.name }));
   }
 
-  const rawHeaders = rows[0];
-  const headers = rawHeaders
-    .map((header) => normalizeHeader(header))
-    .filter((header): header is CanonicalHeader => header !== null);
-
-  const requiredHeaders = (await requiresCourseForTenant(tenantId))
-    ? dvcoeRequiredHeaders
-    : defaultRequiredHeaders;
-  const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
-  if (missingHeaders.length > 0) {
-    throw new Error(`Missing required header(s): ${missingHeaders.join(", ")}`);
+  const emailChunks = chunkArray(emails, DUPLICATE_LOOKUP_CHUNK_SIZE);
+  for (const emailChunk of emailChunks) {
+    // eslint-disable-next-line no-await-in-loop
+    const existing = await prisma.lead.findMany({
+      where: { tenantId, email: { in: emailChunk } },
+      select: { email: true, name: true }
+    });
+    existing.forEach((lead) => {
+      if (lead.email) existingByEmail.set(lead.email, { name: lead.name });
+    });
   }
 
-  const headerMap = new Map<CanonicalHeader, number>();
-  rawHeaders.forEach((header, index) => {
-    const normalized = normalizeHeader(header);
-    if (normalized && !headerMap.has(normalized)) {
-      headerMap.set(normalized, index);
-    }
+  return { existingByPhone, existingByEmail };
+};
+
+const parseRowsFromCsv = async (
+  csvText: string,
+  requiredHeaders: CanonicalHeader[]
+) => {
+  const parser = csvParser({
+    mapHeaders: ({ header }) => header?.trim?.() ?? header
   });
 
-  const previewRows: PreviewRow[] = rows.slice(1).map((row, rowIndex) => {
+  const previewRows: PreviewRow[] = [];
+  const readyRowsWithMeta: Array<{
+    rowNumber: number;
+    data: ParsedImportRow;
+  }> = [];
+  const phoneCounts = new Map<string, number>();
+  const emailCounts = new Map<string, number>();
+
+  let headers: CanonicalHeader[] = [];
+  let rawHeaders: string[] = [];
+  let canonicalToRawHeader = new Map<CanonicalHeader, string>();
+  let headerInitialized = false;
+  let parsedDataRowCount = 0;
+
+  const rowStream = Readable.from([csvText]).pipe(parser);
+
+  for await (const rawRecord of rowStream as AsyncIterable<Record<string, string>>) {
+    if (!headerInitialized) {
+      rawHeaders = Object.keys(rawRecord);
+      headers = rawHeaders
+        .map((header) => normalizeHeader(header))
+        .filter((header): header is CanonicalHeader => header !== null);
+      const missingHeaders = requiredHeaders.filter((header) => !headers.includes(header));
+      if (missingHeaders.length > 0) {
+        throw new Error(`Missing required header(s): ${missingHeaders.join(", ")}`);
+      }
+      canonicalToRawHeader = new Map<CanonicalHeader, string>();
+      rawHeaders.forEach((rawHeader) => {
+        const normalized = normalizeHeader(rawHeader);
+        if (normalized && !canonicalToRawHeader.has(normalized)) {
+          canonicalToRawHeader.set(normalized, rawHeader);
+        }
+      });
+      headerInitialized = true;
+    }
+
+    parsedDataRowCount += 1;
+    if (parsedDataRowCount > MAX_UPLOAD_ROWS) {
+      throw new Error("Maximum 50,000 leads allowed per upload.");
+    }
+
+    const rowNumber = parsedDataRowCount + 1;
     const getCell = (header: CanonicalHeader) => {
-      const cellIndex = headerMap.get(header);
-      return cellIndex == null ? "" : row[cellIndex] ?? "";
+      const rawHeader = canonicalToRawHeader.get(header);
+      return String(rawHeader ? rawRecord[rawHeader] ?? "" : "").trim();
     };
 
-    const original = rawHeaders.reduce<Record<string, string>>((accumulator, header, index) => {
-      accumulator[header] = row[index] ?? "";
+    const original = rawHeaders.reduce<Record<string, string>>((accumulator, header) => {
+      accumulator[header] = String(rawRecord[header] ?? "");
       return accumulator;
     }, {});
 
@@ -367,91 +378,130 @@ const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAn
           }
         : null;
 
-    return {
-      rowNumber: rowIndex + 2,
-      original,
-      normalized,
-      status: reasons.length > 0 ? "error" : "ready",
-      reasons
-    };
-  });
-
-  const readyRows = previewRows.filter((row) => row.normalized);
-  const phoneCounts = new Map<string, number>();
-  const emailCounts = new Map<string, number>();
-
-  readyRows.forEach((row) => {
-    if (!row.normalized) return;
-    phoneCounts.set(row.normalized.phone, (phoneCounts.get(row.normalized.phone) ?? 0) + 1);
-    if (row.normalized.email) {
-      emailCounts.set(row.normalized.email, (emailCounts.get(row.normalized.email) ?? 0) + 1);
+    if (normalized) {
+      readyRowsWithMeta.push({ rowNumber, data: normalized });
+      phoneCounts.set(normalized.phone, (phoneCounts.get(normalized.phone) ?? 0) + 1);
+      if (normalized.email) {
+        emailCounts.set(normalized.email, (emailCounts.get(normalized.email) ?? 0) + 1);
+      }
     }
-  });
 
-  const duplicateChecks: Array<{ phone: { in: string[] } } | { email: { in: string[] } }> = [];
-
-  if (phoneCounts.size > 0) {
-    duplicateChecks.push({ phone: { in: [...phoneCounts.keys()] } });
+    if (previewRows.length < MAX_PREVIEW_ROWS) {
+      previewRows.push({
+        rowNumber,
+        original,
+        normalized,
+        status: reasons.length > 0 ? "error" : "ready",
+        reasons
+      });
+    }
   }
 
-  if (emailCounts.size > 0) {
-    duplicateChecks.push({ email: { in: [...emailCounts.keys()] } });
+  if (!headerInitialized) {
+    throw new Error("CSV file is empty");
   }
-
-  const existingLeads =
-    duplicateChecks.length > 0
-      ? await prisma.lead.findMany({
-          where: {
-            tenantId,
-            OR: duplicateChecks
-          },
-          select: { id: true, name: true, phone: true, email: true }
-        })
-      : [];
-
-  const existingByPhone = new Map(existingLeads.map((lead) => [lead.phone, lead]));
-  const existingByEmail = new Map(
-    existingLeads
-      .filter((lead) => lead.email)
-      .map((lead) => [lead.email as string, lead])
-  );
-
-  previewRows.forEach((row) => {
-    if (!row.normalized || row.status === "error") return;
-
-    if ((phoneCounts.get(row.normalized.phone) ?? 0) > 1) {
-      row.reasons.push("Duplicate phone found in uploaded file");
-    }
-
-    if (row.normalized.email && (emailCounts.get(row.normalized.email) ?? 0) > 1) {
-      row.reasons.push("Duplicate email found in uploaded file");
-    }
-
-    const existingPhoneLead = existingByPhone.get(row.normalized.phone);
-    if (existingPhoneLead) {
-      row.reasons.push(`Phone already exists in CRM (${existingPhoneLead.name})`);
-    }
-
-    const existingEmailLead =
-      row.normalized.email ? existingByEmail.get(row.normalized.email) : null;
-    if (existingEmailLead) {
-      row.reasons.push(`Email already exists in CRM (${existingEmailLead.name})`);
-    }
-
-    if (row.reasons.length > 0) {
-      row.status = "duplicate";
-    }
-  });
 
   return {
     headers,
-    rows: previewRows,
-    summary: {
-      totalRows: previewRows.length,
-      readyRows: previewRows.filter((row) => row.status === "ready").length,
-      duplicateRows: previewRows.filter((row) => row.status === "duplicate").length,
-      errorRows: previewRows.filter((row) => row.status === "error").length
+    previewRows,
+    readyRowsWithMeta,
+    phoneCounts,
+    emailCounts,
+    totalRows: parsedDataRowCount
+  };
+};
+
+const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAnalysis> => {
+  const requiredHeaders = (await requiresCourseForTenant(tenantId))
+    ? dvcoeRequiredHeaders
+    : defaultRequiredHeaders;
+
+  const parsed = await parseRowsFromCsv(csv, requiredHeaders);
+  const { existingByPhone, existingByEmail } = await findExistingLeadMatches(
+    tenantId,
+    [...parsed.phoneCounts.keys()],
+    [...parsed.emailCounts.keys()]
+  );
+
+  const duplicateReasonsByRow = new Map<number, string[]>();
+
+  parsed.readyRowsWithMeta.forEach((row) => {
+    const reasons: string[] = [];
+    if ((parsed.phoneCounts.get(row.data.phone) ?? 0) > 1) {
+      reasons.push("Duplicate phone found in uploaded file");
     }
+    if (row.data.email && (parsed.emailCounts.get(row.data.email) ?? 0) > 1) {
+      reasons.push("Duplicate email found in uploaded file");
+    }
+
+    const existingPhoneLead = existingByPhone.get(row.data.phone);
+    if (existingPhoneLead) {
+      reasons.push(`Phone already exists in CRM (${existingPhoneLead.name})`);
+    }
+
+    if (row.data.email) {
+      const existingEmailLead = existingByEmail.get(row.data.email);
+      if (existingEmailLead) {
+        reasons.push(`Email already exists in CRM (${existingEmailLead.name})`);
+      }
+    }
+
+    if (reasons.length > 0) {
+      duplicateReasonsByRow.set(row.rowNumber, reasons);
+    }
+  });
+
+  let errorRows = 0;
+  let duplicateRows = 0;
+  let readyRowsCount = 0;
+
+  parsed.previewRows.forEach((row) => {
+    if (row.status === "error") {
+      errorRows += 1;
+      return;
+    }
+
+    const duplicateReasons = duplicateReasonsByRow.get(row.rowNumber) ?? [];
+    if (duplicateReasons.length > 0) {
+      row.status = "duplicate";
+      row.reasons.push(...duplicateReasons);
+      duplicateRows += 1;
+      return;
+    }
+
+    readyRowsCount += 1;
+  });
+
+  // Count rows not present in preview (when file has > MAX_PREVIEW_ROWS rows)
+  const previewedRowNumbers = new Set(parsed.previewRows.map((row) => row.rowNumber));
+  parsed.readyRowsWithMeta.forEach((row) => {
+    if (previewedRowNumbers.has(row.rowNumber)) return;
+    if (duplicateReasonsByRow.has(row.rowNumber)) {
+      duplicateRows += 1;
+    } else {
+      readyRowsCount += 1;
+    }
+  });
+
+  // Non-ready row count among all rows = total - ready - duplicate
+  errorRows = parsed.totalRows - readyRowsCount - duplicateRows;
+
+  const readyRows = parsed.readyRowsWithMeta
+    .filter((row) => !duplicateReasonsByRow.has(row.rowNumber))
+    .map((row) => row.data);
+
+  return {
+    headers: parsed.headers,
+    rows: parsed.previewRows,
+    readyRows,
+    summary: {
+      totalRows: parsed.totalRows,
+      readyRows: readyRowsCount,
+      duplicateRows,
+      errorRows
+    },
+    rowsTruncated: parsed.totalRows > MAX_PREVIEW_ROWS,
+    maxPreviewRows: MAX_PREVIEW_ROWS
   };
 };
 
@@ -486,6 +536,14 @@ const extractCsvFromPreviewRequest = (req: any) => {
   return null;
 };
 
+const withUpload = (req: any, res: any): Promise<void> =>
+  new Promise((resolve, reject) => {
+    upload.single("file")(req, res, (error: unknown) => {
+      if (error) return reject(error);
+      resolve();
+    });
+  });
+
 const buildAccessibleLeadWhere = (
   leadIds: number[] | null,
   reqUser: Express.UserPayload
@@ -511,8 +569,22 @@ const buildAccessibleLeadWhere = (
 
 router.post(
   "/import/csv/preview",
-  upload.single("file"),
   asyncHandler(async (req, res) => {
+    try {
+      if (String(req.headers["content-type"] ?? "").includes("multipart/form-data")) {
+        await withUpload(req, res);
+      }
+    } catch (error) {
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          message: "Uploaded file is too large. Maximum allowed size is 50 MB."
+        });
+      }
+      return res.status(400).json({
+        message: "Invalid CSV upload payload"
+      });
+    }
+
     logImportContext(req, "request_received", {
       hasFile: Boolean(req.file),
       contentType: req.headers["content-type"] ?? null
@@ -575,52 +647,51 @@ router.post(
         });
       }
 
-      const created = [];
+      let createdCount = 0;
       const skipped = [];
+      const dataRows = readyRows.map((row) => row.normalized);
 
-      for (const row of readyRows) {
+      for (const chunk of chunkArray(dataRows, DB_WRITE_CHUNK_SIZE)) {
         try {
-          const lead = await prisma.lead.create({
-            data: {
-              tenantId: req.user!.tenantId,
-              name: row.normalized.name,
-              phone: row.normalized.phone,
-              email: row.normalized.email,
-              address: row.normalized.address,
-              parentContact: row.normalized.parentContact,
-              course: row.normalized.course,
-              source: row.normalized.source,
-              status: row.normalized.status,
-              priority: row.normalized.priority,
-              nextFollowUp: row.normalized.nextFollowUp ? new Date(row.normalized.nextFollowUp) : null,
-              assignedTo: req.user?.role === Role.COUNSELOR ? req.user.id : null
-            },
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              email: true,
-              status: true,
-              priority: true
-            }
-          });
-          created.push(lead);
+          // eslint-disable-next-line no-await-in-loop
+          const result = await prisma.$transaction(async (tx) =>
+            tx.lead.createMany({
+              data: chunk.map((row) => ({
+                tenantId: req.user!.tenantId,
+                name: row.name,
+                phone: row.phone,
+                email: row.email,
+                address: row.address,
+                parentContact: row.parentContact,
+                course: row.course,
+                source: row.source,
+                status: row.status,
+                priority: row.priority,
+                nextFollowUp: row.nextFollowUp ? new Date(row.nextFollowUp) : null,
+                assignedTo: req.user?.role === Role.COUNSELOR ? req.user.id : null
+              })),
+              skipDuplicates: true
+            })
+          );
+          createdCount += result.count;
         } catch (error) {
           skipped.push({
-            rowNumber: row.rowNumber,
-            name: row.normalized.name,
-            reason: error instanceof Error ? error.message : "Unknown import error"
+            rowNumber: -1,
+            name: "Chunk",
+            reason: error instanceof Error ? error.message : "Chunk import failed"
           });
         }
       }
 
+      const skippedCount = Math.max(0, readyRows.length - createdCount) + skipped.length;
+
       return res.status(201).json({
-        message: `Imported ${created.length} lead${created.length === 1 ? "" : "s"}`,
-        createdCount: created.length,
-        skippedCount: skipped.length,
+        message: `Imported ${createdCount} lead${createdCount === 1 ? "" : "s"}`,
+        createdCount,
+        skippedCount,
         duplicateCount: analysis.summary.duplicateRows,
         errorCount: analysis.summary.errorRows,
-        created,
+        created: [],
         skipped
       });
     } catch (error) {
@@ -643,9 +714,13 @@ router.post(
     }
 
     const requireCourse = await requiresCourseForTenant(req.user!.tenantId);
-    const created = [];
     const skipped = [];
     let rowIndex = 0;
+    let createdCount = 0;
+    const rowsForInsert: Array<{
+      rowNumber: number;
+      data: z.infer<typeof importChunkSchema>["rows"][number];
+    }> = [];
 
     for (const row of parsed.data.rows) {
       rowIndex += 1;
@@ -657,46 +732,46 @@ router.post(
         });
         continue;
       }
+      rowsForInsert.push({ rowNumber: rowIndex, data: row });
+    }
+
+    for (const chunk of chunkArray(rowsForInsert, DB_WRITE_CHUNK_SIZE)) {
       try {
-        const lead = await prisma.lead.create({
-          data: {
-            tenantId: req.user!.tenantId,
-            name: row.name,
-            phone: row.phone,
-            email: row.email,
-            address: row.address,
-            parentContact: row.parentContact,
-            course: row.course,
-            source: row.source,
-            status: row.status,
-            priority: row.priority,
-            nextFollowUp: row.nextFollowUp ? new Date(row.nextFollowUp) : null,
-            assignedTo: req.user?.role === Role.COUNSELOR ? req.user.id : null
-          },
-          select: {
-            id: true,
-            name: true,
-            phone: true,
-            email: true,
-            status: true,
-            priority: true
-          }
-        });
-        created.push(lead);
+        // eslint-disable-next-line no-await-in-loop
+        const result = await prisma.$transaction(async (tx) =>
+          tx.lead.createMany({
+            data: chunk.map(({ data: row }) => ({
+              tenantId: req.user!.tenantId,
+              name: row.name,
+              phone: row.phone,
+              email: row.email,
+              address: row.address,
+              parentContact: row.parentContact,
+              course: row.course,
+              source: row.source,
+              status: row.status,
+              priority: row.priority,
+              nextFollowUp: row.nextFollowUp ? new Date(row.nextFollowUp) : null,
+              assignedTo: req.user?.role === Role.COUNSELOR ? req.user.id : null
+            })),
+            skipDuplicates: true
+          })
+        );
+        createdCount += result.count;
       } catch (error) {
         skipped.push({
-          rowNumber: rowIndex,
-          name: row.name,
-          reason: error instanceof Error ? error.message : "Unknown import error"
+          rowNumber: -1,
+          name: "Chunk",
+          reason: error instanceof Error ? error.message : "Chunk import failed"
         });
       }
     }
 
     return res.status(201).json({
-      message: `Imported ${created.length} lead${created.length === 1 ? "" : "s"} in this chunk`,
-      createdCount: created.length,
-      skippedCount: skipped.length,
-      created,
+      message: `Imported ${createdCount} lead${createdCount === 1 ? "" : "s"} in this chunk`,
+      createdCount,
+      skippedCount: Math.max(0, rowsForInsert.length - createdCount) + skipped.length,
+      created: [],
       skipped
     });
   })
