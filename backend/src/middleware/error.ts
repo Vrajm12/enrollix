@@ -12,5 +12,11 @@ export const errorHandler = (
 ) => {
   // eslint-disable-next-line no-console
   console.error(error);
+  const payloadError = error as { type?: string };
+  if (payloadError?.type === "entity.too.large") {
+    return res.status(413).json({
+      message: "Uploaded payload is too large. Maximum allowed size is 50 MB."
+    });
+  }
   res.status(500).json({ message: "Internal server error" });
 };

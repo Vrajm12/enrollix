@@ -132,8 +132,9 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '10kb' })); // Limit payload size
-app.use(express.urlencoded({ limit: '10kb', extended: true }));
+// Allow larger payloads for bulk CSV flows while still keeping a bounded limit.
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Simple cookie parser middleware
 app.use((req, res, next) => {
