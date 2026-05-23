@@ -79,6 +79,9 @@ type CanonicalHeader =
   | "phone"
   | "email"
   | "location"
+  | "state"
+  | "city"
+  | "pincode"
   | "address"
   | "parent_contact"
   | "course"
@@ -94,6 +97,8 @@ type ParsedImportRow = {
   phone: string;
   email: string | null;
   address: string | null;
+  region: string | null;
+  city: string | null;
   parentContact: string | null;
   course: string | null;
   source: string | null;
@@ -143,6 +148,9 @@ const headerAliases: Record<string, CanonicalHeader> = {
   contact_number: "phone",
   email: "email",
   location: "location",
+  state: "state",
+  city: "city",
+  pincode: "pincode",
   email_id: "email",
   mail: "email",
   address: "address",
@@ -161,7 +169,18 @@ const headerAliases: Record<string, CanonicalHeader> = {
   next_follow_up: "next_follow_up",
   nextfollowup: "next_follow_up",
   follow_up: "next_follow_up",
-  followup: "next_follow_up"
+  followup: "next_follow_up",
+  district: "city",
+  town: "city",
+  village: "city",
+  region: "state",
+  state_name: "state",
+  city_name: "city",
+  zip: "pincode",
+  zipcode: "pincode",
+  postal_code: "pincode",
+  pin: "pincode",
+  pin_code: "pincode"
 };
 
 const defaultRequiredHeaders: CanonicalHeader[] = ["name", "phone"];
@@ -233,6 +252,77 @@ const parseNextFollowUp = (value: string | null) => {
   return Number.isNaN(date.getTime())
     ? { value: null, reason: `Invalid next_follow_up "${value}"` }
     : { value: date.toISOString(), reason: null };
+};
+
+const toTitleCase = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+const CITY_TO_STATE: Record<string, string> = {
+  pune: "Maharashtra",
+  mumbai: "Maharashtra",
+  nagpur: "Maharashtra",
+  nashik: "Maharashtra",
+  kolhapur: "Maharashtra",
+  aurangabad: "Maharashtra",
+  "chhatrapati sambhajinagar": "Maharashtra",
+  ahmedabad: "Gujarat",
+  surat: "Gujarat",
+  vadodara: "Gujarat",
+  bengaluru: "Karnataka",
+  bangalore: "Karnataka",
+  mysuru: "Karnataka",
+  chennai: "Tamil Nadu",
+  coimbatore: "Tamil Nadu",
+  hyderabad: "Telangana",
+  warangal: "Telangana",
+  delhi: "Delhi",
+  "new delhi": "Delhi",
+  noida: "Uttar Pradesh",
+  gurugram: "Haryana",
+  gurgaon: "Haryana",
+  lucknow: "Uttar Pradesh",
+  kanpur: "Uttar Pradesh",
+  jaipur: "Rajasthan",
+  indore: "Madhya Pradesh",
+  bhopal: "Madhya Pradesh",
+  kolkata: "West Bengal",
+  howrah: "West Bengal",
+  patna: "Bihar",
+  bhubaneswar: "Odisha",
+  kochi: "Kerala",
+  trivandrum: "Kerala",
+  thiruvananthapuram: "Kerala",
+  chandigarh: "Chandigarh"
+};
+
+const inferRegionAndCity = (input: {
+  state: string | null;
+  city: string | null;
+  location: string | null;
+}) => {
+  let city = input.city ?? input.location;
+  let region = input.state;
+
+  if (city && city.includes(",")) {
+    const [firstPart, secondPart] = city.split(",").map((part) => part.trim()).filter(Boolean);
+    if (firstPart) city = firstPart;
+    if (!region && secondPart) region = secondPart;
+  }
+
+  const cityKey = city?.trim().toLowerCase() ?? "";
+  if (!region && cityKey && CITY_TO_STATE[cityKey]) {
+    region = CITY_TO_STATE[cityKey];
+  }
+
+  return {
+    city: city ? toTitleCase(city) : null,
+    region: region ? toTitleCase(region) : null
+  };
 };
 
 const requiresCourseForTenant = async (tenantId: number) => {
@@ -345,6 +435,14 @@ const parseRowsFromCsv = async (
     const phone = getCell("phone").trim();
     const email = nonEmpty(getCell("email"));
     const course = nonEmpty(getCell("course"));
+    const rawLocation = nonEmpty(getCell("location"));
+    const rawState = nonEmpty(getCell("state"));
+    const rawCity = nonEmpty(getCell("city"));
+    const inferredGeo = inferRegionAndCity({
+      state: rawState,
+      city: rawCity,
+      location: rawLocation
+    });
 
     if (!name) reasons.push("Name is required");
     if (!phone) reasons.push("Phone is required");
@@ -368,7 +466,9 @@ const parseRowsFromCsv = async (
             name,
             phone,
             email,
-            address: nonEmpty(getCell("address")) ?? nonEmpty(getCell("location")),
+            address: nonEmpty(getCell("address")),
+            region: inferredGeo.region,
+            city: inferredGeo.city,
             parentContact: nonEmpty(getCell("parent_contact")),
             course,
             source: nonEmpty(getCell("source")),
@@ -673,6 +773,8 @@ router.post(
                 phone: row.phone,
                 email: row.email,
                 address: row.address,
+                region: row.region,
+                city: row.city,
                 parentContact: row.parentContact,
                 course: row.course,
                 source: row.source,
@@ -757,6 +859,8 @@ router.post(
               phone: row.phone,
               email: row.email,
               address: row.address,
+              region: null,
+              city: null,
               parentContact: row.parentContact,
               course: row.course,
               source: row.source,
