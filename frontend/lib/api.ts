@@ -265,6 +265,35 @@ export const api = {
       method: "POST",
       body: { csv },
     }),
+  commitCsvImportUpload: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{
+      message: string;
+      createdCount: number;
+      skippedCount: number;
+      duplicateCount: number;
+      errorCount: number;
+      created: Array<{
+        id: number;
+        name: string;
+        phone: string;
+        email: string | null;
+        status: LeadStatus;
+        priority: Priority;
+      }>;
+      skipped: Array<{
+        rowNumber: number;
+        name: string;
+        reason: string;
+      }>;
+      rowsTruncated?: boolean;
+      maxPreviewRows?: number;
+    }>("/bulk/import/csv/commit", {
+      method: "POST",
+      body: form
+    });
+  },
   commitCsvChunk: (rows: Array<{
     name: string;
     phone: string;

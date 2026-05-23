@@ -625,7 +625,23 @@ router.post(
 router.post(
   "/import/csv/commit",
   asyncHandler(async (req, res) => {
-    const parsed = importCsvSchema.safeParse(req.body);
+    try {
+      if (String(req.headers["content-type"] ?? "").includes("multipart/form-data")) {
+        await withUpload(req, res);
+      }
+    } catch (error) {
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({
+          message: "Uploaded file is too large. Maximum allowed size is 50 MB."
+        });
+      }
+      return res.status(400).json({
+        message: "Invalid CSV upload payload"
+      });
+    }
+
+    const csv = extractCsvFromPreviewRequest(req);
+    const parsed = importCsvSchema.safeParse({ csv });
     if (!parsed.success) {
       return res.status(400).json({
         message: "Invalid CSV import payload",
@@ -635,10 +651,7 @@ router.post(
 
     try {
       const analysis = await analyzeCsvImport(parsed.data.csv, req.user!.tenantId);
-      const readyRows = analysis.rows.filter(
-        (row): row is PreviewRow & { normalized: ParsedImportRow } =>
-          row.status === "ready" && row.normalized !== null
-      );
+      const readyRows = analysis.readyRows;
 
       if (readyRows.length === 0) {
         return res.status(400).json({
@@ -649,9 +662,7 @@ router.post(
 
       let createdCount = 0;
       const skipped = [];
-      const dataRows = readyRows.map((row) => row.normalized);
-
-      for (const chunk of chunkArray(dataRows, DB_WRITE_CHUNK_SIZE)) {
+      for (const chunk of chunkArray(readyRows, DB_WRITE_CHUNK_SIZE)) {
         try {
           // eslint-disable-next-line no-await-in-loop
           const result = await prisma.$transaction(async (tx) =>

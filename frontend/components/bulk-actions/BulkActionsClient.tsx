@@ -377,7 +377,9 @@ export default function BulkActionsClient() {
     setImportProgress({ processed: 0, total: totalReadyRows, created: 0, skipped: 0, startedAt });
 
     try {
-      const result = await api.commitCsvImport(csvText);
+      const result = csvFile
+        ? await api.commitCsvImportUpload(csvFile)
+        : await api.commitCsvImport(csvText);
       setImportProgress({
         processed: totalReadyRows,
         total: totalReadyRows,
