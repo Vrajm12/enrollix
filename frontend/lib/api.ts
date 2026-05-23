@@ -23,12 +23,14 @@ const request = async <T>(
   path: string,
   { method = "GET", body, authenticated = true }: RequestOptions = {}
 ): Promise<T> => {
-  const baseHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const isFormDataBody = typeof FormData !== "undefined" && body instanceof FormData;
+  const baseHeaders: Record<string, string> = {};
   const tenantSlug = getTenantSlugFromHost();
   if (tenantSlug) {
     baseHeaders["X-Tenant-Slug"] = tenantSlug;
+  }
+  if (body !== undefined && !isFormDataBody) {
+    baseHeaders["Content-Type"] = "application/json";
   }
 
   const token = authenticated ? getToken() : null;
@@ -42,7 +44,12 @@ const request = async <T>(
     fetch(`${API_BASE_URL}${path}`, {
       method,
       headers: requestHeaders,
-      body: body ? JSON.stringify(body) : undefined,
+      body:
+        body == null
+          ? undefined
+          : isFormDataBody
+            ? (body as FormData)
+            : JSON.stringify(body),
       credentials: "include",
       cache: "no-store",
     });
@@ -196,6 +203,42 @@ export const api = {
       method: "POST",
       body: { csv },
     }),
+  previewCsvImportUpload: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<{
+      headers: string[];
+      rows: {
+        rowNumber: number;
+        original: Record<string, string>;
+        normalized: {
+          name: string;
+          phone: string;
+          email: string | null;
+          address: string | null;
+          parentContact: string | null;
+          course: string | null;
+          source: string | null;
+          status: LeadStatus;
+          priority: Priority;
+          nextFollowUp: string | null;
+        } | null;
+        status: "ready" | "duplicate" | "error";
+        reasons: string[];
+      }[];
+      summary: {
+        totalRows: number;
+        readyRows: number;
+        duplicateRows: number;
+        errorRows: number;
+      };
+      rowsTruncated?: boolean;
+      maxPreviewRows?: number;
+    }>("/bulk/import/csv/preview", {
+      method: "POST",
+      body: form
+    });
+  },
   commitCsvImport: (csv: string) =>
     request<{
       message: string;

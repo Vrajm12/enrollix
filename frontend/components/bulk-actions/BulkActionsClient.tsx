@@ -161,6 +161,7 @@ export default function BulkActionsClient() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [counselors, setCounselors] = useState<Counselor[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvText, setCsvText] = useState('');
   const [fileReady, setFileReady] = useState(false);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -311,17 +312,18 @@ export default function BulkActionsClient() {
 
     resetFeedback();
     try {
-      const text =
-        file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")
-          ? await excelBufferToCsv(file)
-          : await file.text();
+      const isExcel =
+        file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls");
+      const text = isExcel ? await excelBufferToCsv(file) : await file.text();
       setCsvFileName(file.name);
+      setCsvFile(isExcel ? null : file);
       setCsvText(text);
       setFileReady(true);
       setPreview(null);
       setPageSuccess(`File selected: ${file.name}. Click "Upload File" to preview rows.`);
     } catch (error) {
       setPreview(null);
+      setCsvFile(null);
       setCsvText('');
       setCsvFileName(file.name);
       setFileReady(false);
@@ -340,7 +342,9 @@ export default function BulkActionsClient() {
     setPreviewLoading(true);
     setImportLoading(false);
     try {
-      const importPreview = await api.previewCsvImport(csvText);
+      const importPreview = csvFile
+        ? await api.previewCsvImportUpload(csvFile)
+        : await api.previewCsvImport(csvText);
       setPreview(importPreview);
       const previewMessage = importPreview.rowsTruncated
         ? `Preview ready: ${importPreview.summary.readyRows} leads can be imported. Showing first ${importPreview.maxPreviewRows ?? importPreview.rows.length} rows.`
@@ -409,6 +413,7 @@ export default function BulkActionsClient() {
       setPreview(null);
       setCsvText('');
       setCsvFileName('');
+      setCsvFile(null);
       setFileReady(false);
       await loadPageData();
     } catch (error) {

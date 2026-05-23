@@ -1,10 +1,14 @@
 import { LeadStatus, Priority, Role } from "@prisma/client";
 import { Router } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { env } from "../config.js";
+import { resolveTenantSlugFromRequest } from "../utils/tenantSlug.js";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 const importCsvSchema = z.object({
   csv: z.string().min(1, "CSV content is required")
@@ -451,6 +455,37 @@ const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAn
   };
 };
 
+const logImportContext = (req: any, stage: string, extra?: Record<string, unknown>) => {
+  const resolvedTenantSlug = resolveTenantSlugFromRequest(req, env.ROOT_DOMAIN);
+  // eslint-disable-next-line no-console
+  console.log("[bulk.import.csv.preview]", {
+    stage,
+    method: req.method,
+    path: req.originalUrl,
+    origin: req.headers.origin ?? null,
+    host: req.headers.host ?? null,
+    tenantHeader: req.headers["x-tenant-slug"] ?? null,
+    resolvedTenantSlug,
+    authUserId: req.user?.id ?? null,
+    authTenantId: req.user?.tenantId ?? null,
+    role: req.user?.role ?? null,
+    ...extra
+  });
+};
+
+const extractCsvFromPreviewRequest = (req: any) => {
+  if (typeof req.body?.csv === "string" && req.body.csv.trim().length > 0) {
+    return req.body.csv;
+  }
+
+  const uploaded = req.file as Express.Multer.File | undefined;
+  if (uploaded?.buffer?.length) {
+    return uploaded.buffer.toString("utf-8");
+  }
+
+  return null;
+};
+
 const buildAccessibleLeadWhere = (
   leadIds: number[] | null,
   reqUser: Express.UserPayload
@@ -476,9 +511,19 @@ const buildAccessibleLeadWhere = (
 
 router.post(
   "/import/csv/preview",
+  upload.single("file"),
   asyncHandler(async (req, res) => {
-    const parsed = importCsvSchema.safeParse(req.body);
+    logImportContext(req, "request_received", {
+      hasFile: Boolean(req.file),
+      contentType: req.headers["content-type"] ?? null
+    });
+
+    const csv = extractCsvFromPreviewRequest(req);
+    const parsed = importCsvSchema.safeParse({ csv });
     if (!parsed.success) {
+      logImportContext(req, "validation_failed", {
+        validationErrors: parsed.error.flatten()
+      });
       return res.status(400).json({
         message: "Invalid CSV import payload",
         errors: parsed.error.flatten()
@@ -487,8 +532,17 @@ router.post(
 
     try {
       const analysis = await analyzeCsvImport(parsed.data.csv, req.user!.tenantId);
+      logImportContext(req, "analysis_success", {
+        totalRows: analysis.summary.totalRows,
+        readyRows: analysis.summary.readyRows,
+        duplicateRows: analysis.summary.duplicateRows,
+        errorRows: analysis.summary.errorRows
+      });
       return res.json(analysis);
     } catch (error) {
+      logImportContext(req, "analysis_failed", {
+        error: error instanceof Error ? error.message : "Unknown CSV parsing error"
+      });
       return res.status(400).json({
         message: error instanceof Error ? error.message : "Unable to parse CSV"
       });
