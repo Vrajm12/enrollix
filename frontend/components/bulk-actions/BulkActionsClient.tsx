@@ -363,12 +363,8 @@ export default function BulkActionsClient() {
       setPageError('Preview and upload CSV first.');
       return;
     }
-
-    const readyRows = preview.rows
-      .filter((row): row is ImportPreviewRow & { normalized: NonNullable<ImportPreviewRow["normalized"]> } => row.status === 'ready' && row.normalized !== null)
-      .map((row) => row.normalized);
-
-    if (readyRows.length === 0) {
+    const totalReadyRows = preview.summary.readyRows;
+    if (totalReadyRows === 0) {
       setPageError('No ready rows available to import.');
       return;
     }
@@ -378,38 +374,18 @@ export default function BulkActionsClient() {
     setImportPaused(false);
     setImportCancelRequested(false);
     const startedAt = Date.now();
-    setImportProgress({ processed: 0, total: readyRows.length, created: 0, skipped: 0, startedAt });
+    setImportProgress({ processed: 0, total: totalReadyRows, created: 0, skipped: 0, startedAt });
 
     try {
-      const CHUNK_SIZE = 25;
-      let processed = 0;
-      let created = 0;
-      let skipped = 0;
-
-      for (let index = 0; index < readyRows.length; index += CHUNK_SIZE) {
-        if (importCancelRef.current) break;
-
-        while (importPausedRef.current) {
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise((resolve) => setTimeout(resolve, 300));
-          if (importCancelRef.current) break;
-        }
-        if (importCancelRef.current) break;
-
-        const chunk = readyRows.slice(index, index + CHUNK_SIZE);
-        // eslint-disable-next-line no-await-in-loop
-        const result = await api.commitCsvChunk(chunk);
-        processed += chunk.length;
-        created += result.createdCount;
-        skipped += result.skippedCount;
-        setImportProgress({ processed, total: readyRows.length, created, skipped, startedAt });
-      }
-
-      if (importCancelRef.current) {
-        setPageSuccess(`Import cancelled. Completed ${processed}/${readyRows.length}.`);
-      } else {
-        setPageSuccess(`Import completed: ${created} created, ${skipped} skipped.`);
-      }
+      const result = await api.commitCsvImport(csvText);
+      setImportProgress({
+        processed: totalReadyRows,
+        total: totalReadyRows,
+        created: result.createdCount,
+        skipped: result.skippedCount,
+        startedAt
+      });
+      setPageSuccess(`Import completed: ${result.createdCount} created, ${result.skippedCount} skipped.`);
       setPreview(null);
       setCsvText('');
       setCsvFileName('');
@@ -750,12 +726,12 @@ export default function BulkActionsClient() {
               <button
                 type="button"
                 onClick={handleCommitImport}
-                disabled={importLoading || previewReadyRows === 0}
+                disabled={importLoading || preview.summary.readyRows === 0}
                 className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
                 {importLoading
                   ? `Importing ${importProgress.processed}/${importProgress.total}...`
-                  : `Import ${previewReadyRows} lead(s)`}
+                  : `Import ${preview.summary.readyRows} lead(s)`}
               </button>
             </div>
             {importLoading ? (

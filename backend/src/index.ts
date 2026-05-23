@@ -103,7 +103,12 @@ const bulkLimiter = rateLimit({
   max: 10, // 10 bulk operations per hour
   message: "Bulk operation limit exceeded, please try again later",
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skip: (req) => {
+    // CSV import can require many chunk/commit calls for large files.
+    // Do not throttle these paths with the strict bulk limiter.
+    return req.path.startsWith("/import/csv/");
+  }
 });
 
 // Security: Trust proxy in production
