@@ -175,6 +175,7 @@ export default function BulkActionsClient() {
     skipped: 0,
     startedAt: 0
   });
+  const [progressNow, setProgressNow] = useState(Date.now());
   const [messageChannel, setMessageChannel] = useState<MessageChannel>('whatsapp');
   const [messageText, setMessageText] = useState('');
   const [messageStatusFilter, setMessageStatusFilter] = useState<FilterStatus>('ALL');
@@ -253,6 +254,14 @@ export default function BulkActionsClient() {
   useEffect(() => {
     importCancelRef.current = importCancelRequested;
   }, [importCancelRequested]);
+
+  useEffect(() => {
+    if (!importLoading) return;
+    const timer = setInterval(() => {
+      setProgressNow(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [importLoading]);
 
   const filteredMessagingLeads = useMemo(
     () =>
@@ -537,11 +546,13 @@ export default function BulkActionsClient() {
 
   const previewReadyRows = preview?.rows.filter((row) => row.status === 'ready').length ?? 0;
   const importPercent = importProgress.total > 0 ? Math.round((importProgress.processed / importProgress.total) * 100) : 0;
-  const elapsedMs = importProgress.startedAt ? Date.now() - importProgress.startedAt : 0;
+  const elapsedMs = importProgress.startedAt ? progressNow - importProgress.startedAt : 0;
   const avgPerRowMs = importProgress.processed > 0 ? elapsedMs / importProgress.processed : 0;
   const etaMs = avgPerRowMs > 0 ? (importProgress.total - importProgress.processed) * avgPerRowMs : 0;
   const etaHours = Math.floor(etaMs / 3600000);
   const etaMinutes = Math.floor((etaMs % 3600000) / 60000);
+  const elapsedHours = Math.floor(elapsedMs / 3600000);
+  const elapsedMinutes = Math.floor((elapsedMs % 3600000) / 60000);
   const filteredMessagingIds = filteredMessagingLeads.map((lead) => lead.id);
   const filteredUpdateIds = filteredUpdateLeads.map((lead) => lead.id);
 
@@ -737,19 +748,22 @@ export default function BulkActionsClient() {
                 disabled={importLoading || previewReadyRows === 0}
                 className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
               >
-                {importLoading ? 'Importing...' : `Import ${previewReadyRows} lead(s)`}
+                {importLoading
+                  ? `Importing ${importProgress.processed}/${importProgress.total}...`
+                  : `Import ${previewReadyRows} lead(s)`}
               </button>
             </div>
             {importLoading ? (
               <div className="border-b border-slate-200/70 px-5 py-4">
                 <div className="mb-2 flex items-center justify-between text-sm font-semibold text-slate-700">
-                  <span>{importProgress.processed}/{importProgress.total}</span>
+                  <span>{importProgress.processed}/{importProgress.total} ({importPercent}%)</span>
                   <span>ETA {String(etaHours).padStart(2, '0')}:{String(etaMinutes).padStart(2, '0')}</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded bg-slate-200">
                   <div className="h-full bg-blue-600 transition-all" style={{ width: `${importPercent}%` }} />
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
+                  <span>Elapsed: {String(elapsedHours).padStart(2, '0')}:{String(elapsedMinutes).padStart(2, '0')}</span>
                   <span>Created: {importProgress.created}</span>
                   <span>Skipped: {importProgress.skipped}</span>
                 </div>

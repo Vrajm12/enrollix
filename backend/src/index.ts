@@ -26,6 +26,22 @@ const isDevelopment = (process.env.NODE_ENV ?? "development") !== "production";
 
 const normalizeOrigin = (origin: string) => origin.trim().replace(/\/$/, "");
 const normalizedAllowedOrigins = allowedOrigins.map(normalizeOrigin);
+const allowedRootHosts = new Set(
+  [env.ROOT_DOMAIN, ...normalizedAllowedOrigins]
+    .map((value) => {
+      const normalizedValue = value.trim().replace(/\/$/, "");
+      if (!normalizedValue) return null;
+      try {
+        if (/^https?:\/\//i.test(normalizedValue)) {
+          return new URL(normalizedValue).hostname.toLowerCase();
+        }
+        return normalizedValue.toLowerCase();
+      } catch {
+        return null;
+      }
+    })
+    .filter((value): value is string => Boolean(value))
+);
 
 const isLocalDevOrigin = (origin: string) => {
   try {
@@ -39,7 +55,10 @@ const isLocalDevOrigin = (origin: string) => {
 const isAllowedSubdomainOrigin = (origin: string) => {
   try {
     const { hostname } = new URL(origin);
-    return hostname === env.ROOT_DOMAIN || hostname.endsWith(`.${env.ROOT_DOMAIN}`);
+    const normalizedHost = hostname.toLowerCase();
+    return [...allowedRootHosts].some(
+      (rootHost) => normalizedHost === rootHost || normalizedHost.endsWith(`.${rootHost}`)
+    );
   } catch {
     return false;
   }
@@ -107,7 +126,7 @@ app.use(
       return callback(new Error("CORS origin not allowed"));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Slug'],
     maxAge: 3600
   })
