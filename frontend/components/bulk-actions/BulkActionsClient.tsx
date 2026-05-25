@@ -210,12 +210,7 @@ export default function BulkActionsClient() {
     setTenantSlug(getTenantSlugFromHost());
   }, []);
 
-  const requiredCsvColumns = useMemo(() => {
-    if (tenantSlug?.toLowerCase() === 'dvcoe') {
-      return [...BASE_REQUIRED_CSV_COLUMNS, 'course'];
-    }
-    return BASE_REQUIRED_CSV_COLUMNS;
-  }, [tenantSlug]);
+  const requiredCsvColumns = useMemo(() => BASE_REQUIRED_CSV_COLUMNS, []);
 
   const handleAuthFailure = () => {
     clearSession();

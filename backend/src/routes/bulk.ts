@@ -187,7 +187,6 @@ const headerAliases: Record<string, CanonicalHeader> = {
 };
 
 const defaultRequiredHeaders: CanonicalHeader[] = ["name", "phone"];
-const dvcoeRequiredHeaders: CanonicalHeader[] = ["name", "phone", "course"];
 
 const exportableColumns = [
   "sr_no",
@@ -406,14 +405,6 @@ const inferRegionAndCity = (input: {
   };
 };
 
-const requiresCourseForTenant = async (tenantId: number) => {
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { slug: true }
-  });
-  return tenant?.slug?.toLowerCase() === "dvcoe";
-};
-
 const chunkArray = <T>(items: T[], chunkSize: number): T[][] => {
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += chunkSize) {
@@ -529,7 +520,6 @@ const parseRowsFromCsv = async (
 
     if (!name) reasons.push("Name is required");
     if (!phone) reasons.push("Phone is required");
-    if (requiredHeaders.includes("course") && !course) reasons.push("Course is required");
 
     if (email && !z.string().email().safeParse(email).success) {
       reasons.push(`Invalid email "${email}"`);
@@ -596,9 +586,7 @@ const parseRowsFromCsv = async (
 };
 
 const analyzeCsvImport = async (csv: string, tenantId: number): Promise<ImportAnalysis> => {
-  const requiredHeaders = (await requiresCourseForTenant(tenantId))
-    ? dvcoeRequiredHeaders
-    : defaultRequiredHeaders;
+  const requiredHeaders = defaultRequiredHeaders;
 
   const parsed = await parseRowsFromCsv(csv, requiredHeaders);
   const { existingByPhone, existingByEmail } = await findExistingLeadMatches(
@@ -913,7 +901,6 @@ router.post(
       });
     }
 
-    const requireCourse = await requiresCourseForTenant(req.user!.tenantId);
     const skipped = [];
     let rowIndex = 0;
     let createdCount = 0;
@@ -924,14 +911,6 @@ router.post(
 
     for (const row of parsed.data.rows) {
       rowIndex += 1;
-      if (requireCourse && !row.course?.trim()) {
-        skipped.push({
-          rowNumber: rowIndex,
-          name: row.name,
-          reason: 'Course is required for this tenant'
-        });
-        continue;
-      }
       rowsForInsert.push({ rowNumber: rowIndex, data: row });
     }
 
