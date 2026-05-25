@@ -28,6 +28,13 @@ const CITY_TO_STATE: Record<string, string> = Object.entries(STATE_TO_CITIES).re
   {} as Record<string, string>
 );
 
+const MAHARASHTRA_CITY_ALIASES = [
+  "ahilyanagar", "ahmednagar", "chhatrapati sambhajinagar", "aurangabad", "dharashiv", "osmanabad", "navi mumbai",
+  "pimpri chinchwad", "mira bhayandar", "dombivli", "bhiwandi", "panvel", "baramati", "malegaon", "shirdi", "satpur",
+  "hinjawadi", "hadapsar", "wagholi", "taloja", "ambarnath", "ulhasnagar", "vasai", "nalasopara", "vashi", "airoli"
+];
+for (const alias of MAHARASHTRA_CITY_ALIASES) CITY_TO_STATE[alias] = "Maharashtra";
+
 const normalizePincode = (value: string | null | undefined) => {
   if (!value) return null;
   const digits = value.replace(/\D/g, "");
@@ -56,34 +63,75 @@ const inferStateFromPincode = (pincode: string | null) => {
 const parseArgs = () => {
   const args = process.argv.slice(2);
   const tenantArg = args.find((arg) => arg.startsWith("--tenantId="));
+  const tenantSlugArg = args.find((arg) => arg.startsWith("--tenantSlug="));
   const tenantId = tenantArg ? Number(tenantArg.split("=")[1]) : undefined;
-  return Number.isFinite(tenantId) ? tenantId : undefined;
+  const tenantSlug = tenantSlugArg ? tenantSlugArg.split("=")[1]?.trim().toLowerCase() : undefined;
+  return {
+    tenantId: Number.isFinite(tenantId) ? tenantId : undefined,
+    tenantSlug: tenantSlug || undefined
+  };
 };
 
 async function main() {
-  const tenantId = parseArgs();
+  const args = parseArgs();
+  let tenantId = args.tenantId;
+  if (!tenantId && args.tenantSlug) {
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: args.tenantSlug },
+      select: { id: true }
+    });
+    if (!tenant) {
+      throw new Error(`Tenant slug "${args.tenantSlug}" not found`);
+    }
+    tenantId = tenant.id;
+  }
+
   const where = tenantId ? { tenantId } : {};
   const leads = await prisma.lead.findMany({
     where,
-    select: { id: true, city: true, region: true, pincode: true, address: true }
+    select: { id: true, city: true, region: true, pincode: true, address: true, source: true, course: true, name: true }
   });
 
   let updated = 0;
 
   for (const lead of leads) {
     const city = lead.city?.trim() || null;
-    const extractedPin = normalizePincode(lead.pincode) ?? normalizePincode(lead.address ?? null);
+    const extractedPin =
+      normalizePincode(lead.pincode) ??
+      normalizePincode(lead.address ?? null) ??
+      normalizePincode(lead.source ?? null) ??
+      normalizePincode(lead.course ?? null) ??
+      normalizePincode(lead.name ?? null);
+
+    let inferredCity = city;
+    if (!inferredCity && lead.address) {
+      const addressLower = lead.address.toLowerCase();
+      for (const [knownCity] of Object.entries(CITY_TO_STATE)) {
+        if (addressLower.includes(knownCity)) {
+          inferredCity = knownCity
+            .split(/\s+/)
+            .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+            .join(" ");
+          break;
+        }
+      }
+    }
+
     const inferredRegion =
       lead.region?.trim() ||
-      (city ? CITY_TO_STATE[city.toLowerCase()] ?? null : null) ||
+      (inferredCity ? CITY_TO_STATE[inferredCity.toLowerCase()] ?? null : null) ||
       inferStateFromPincode(extractedPin);
 
     const nextData = {
+      city: inferredCity,
       pincode: extractedPin,
       region: inferredRegion ? inferredRegion : lead.region
     };
 
-    const changed = (nextData.pincode ?? null) !== (lead.pincode ?? null) || (nextData.region ?? null) !== (lead.region ?? null);
+    const changed =
+      (nextData.city ?? null) !== (lead.city ?? null) ||
+      (nextData.pincode ?? null) !== (lead.pincode ?? null) ||
+      (nextData.region ?? null) !== (lead.region ?? null);
     if (!changed) continue;
 
     // eslint-disable-next-line no-await-in-loop

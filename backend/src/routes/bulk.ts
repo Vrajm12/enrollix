@@ -328,6 +328,41 @@ const CITY_TO_STATE: Record<string, string> = Object.entries(STATE_TO_CITIES).re
   {} as Record<string, string>
 );
 
+const MAHARASHTRA_CITY_ALIASES = [
+  "ahilyanagar", "ahmednagar", "chhatrapati sambhajinagar", "aurangabad", "dharashiv", "osmanabad",
+  "achalpur", "aheri", "airoli", "akkalkot", "akkurdi", "akot", "alibag", "amalner", "ambad",
+  "ambajogai", "ambarnath", "ambejogai", "amgaon", "amravati camp", "anjangaon surji", "arjuni morgaon",
+  "arni", "arvi", "ashti", "atpadi", "aurad shahajani", "ausa", "badlapur", "balapur", "ballarpur",
+  "baramati", "barshi", "basmat", "basmath", "belapur", "bhadgaon", "bhadravati", "bhandup", "bhayandar",
+  "bhiwandi", "bhokar", "bhokardan", "bhor", "bhosari", "bhusawal", "biloli", "boisar", "brahmapuri",
+  "buldana", "butibori", "chakan", "chalisgaon", "chandgad", "chandrapur midc", "chandur", "chandur bazar",
+  "charholi", "chembur", "chikhli", "chimur", "chinchwad", "chiplun", "dahanu", "dapoli", "darwha",
+  "daryapur", "daund", "deglur", "dehu", "deolali", "deoli", "deulgaon raja", "dharangaon", "dharni",
+  "digras", "dindori", "dombivli", "erandol", "faizpur", "gadhinglaj", "gangakhed", "gangapur", "georai",
+  "ghansawangi", "ghatanji", "gondpipri", "goregaon", "hadapsar", "hinganghat", "hinjawadi", "ichalkaranji",
+  "igatpuri", "indapur", "islampur", "jaisingpur", "jamkhed", "jamner", "jath", "jejuri", "jintur", "junnar",
+  "kagal", "kaij", "kalamb", "kalamnuri", "kalyan", "kamptee", "kandhar", "kannad", "karad", "karanja",
+  "karjat", "karmala", "katol", "kavathe mahankal", "khed", "khopoli", "kinwat", "kolad", "kopargaon",
+  "koregaon", "kudal", "kurduwadi", "kurla", "lanja", "lasalgaon", "latur midc", "lohara", "lonavala",
+  "lonar", "madha", "mahabaleshwar", "mahad", "majalgaon", "malegaon", "malkapur", "malshiras", "malvan",
+  "manchar", "mangaon", "mangrulpir", "manmad", "manora", "matheran", "mehkar", "mira road", "mira bhayandar",
+  "mohadi", "mohol", "morshi", "motala", "muktainagar", "mul", "mulund", "murbad", "murgud", "murtijapur",
+  "murud", "nagbhid", "nalasopara", "nandgaon", "narkhed", "narayangaon", "navi mumbai", "neral", "nevasa",
+  "nilanga", "niphad", "ojhar", "omerga", "pachora", "paithan", "palus", "pandharpur", "panvel", "paranda",
+  "parli", "parli vaijnath", "partur", "pathardi", "pathri", "patur", "pauni", "pen", "phaltan", "pimpri",
+  "pimpri chinchwad", "pusad", "rahata", "rahuri", "rajapur", "rajgurunagar", "rajura", "ralegaon", "ramtek",
+  "ranjangaon", "raver", "risod", "sailu", "sakoli", "sakri", "sangamner", "sangola", "saswad", "satpur",
+  "sawantwadi", "selu", "shahada", "shegaon", "shendurjana", "shikrapur", "shirdi", "shirpur", "shirur",
+  "shirwal", "shrigonda", "shrirampur", "sillod", "sinnar", "sironcha", "solapur midc", "sonai", "tasgaon",
+  "telhara", "tembhurni", "thakurli", "tirora", "tuljapur", "tumsar", "udgir", "ulhasnagar", "umarga",
+  "umarkhed", "umred", "uran", "uruli kanchan", "vaijapur", "vasai", "vashi", "vita", "wadgaon", "wagholi",
+  "wai", "waluj", "wani", "warora", "warud", "washim midc", "yawal", "yeola", "yevla"
+];
+
+for (const alias of MAHARASHTRA_CITY_ALIASES) {
+  CITY_TO_STATE[alias] = "Maharashtra";
+}
+
 const inferRegionAndCity = (input: {
   state: string | null;
   city: string | null;

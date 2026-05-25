@@ -70,6 +70,7 @@ router.get(
           ? req.query.region.trim()
           : "";
     const city = typeof req.query.city === "string" ? req.query.city.trim() : "";
+    const pincode = typeof req.query.pincode === "string" ? req.query.pincode.trim() : "";
     const course = typeof req.query.course === "string" ? req.query.course.trim() : "";
     const tenantFilter = { tenantId: req.user!.tenantId };
 
@@ -105,6 +106,12 @@ router.get(
     if (course) {
       andFilters.push({
         course: { contains: course, mode: "insensitive" }
+      });
+    }
+
+    if (pincode) {
+      andFilters.push({
+        pincode: { contains: pincode, mode: "insensitive" }
       });
     }
 
@@ -237,6 +244,27 @@ router.delete(
       message: "Leads deleted successfully",
       deletedCount: result.count,
       requestedCount: leadIds.length
+    });
+  })
+);
+
+router.get(
+  "/meta/pincodes",
+  asyncHandler(async (req, res) => {
+    const where: Prisma.LeadWhereInput =
+      req.user?.role === Role.TENANT_ADMIN || req.user?.role === Role.SUPER_ADMIN
+        ? { tenantId: req.user!.tenantId, pincode: { not: null } }
+        : { tenantId: req.user!.tenantId, assignedTo: req.user!.id, pincode: { not: null } };
+
+    const rows = await prisma.lead.findMany({
+      where,
+      select: { pincode: true },
+      distinct: ["pincode"],
+      orderBy: { pincode: "asc" }
+    });
+
+    return res.json({
+      pincodes: rows.map((row) => row.pincode).filter((value): value is string => Boolean(value))
     });
   })
 );

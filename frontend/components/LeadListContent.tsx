@@ -25,9 +25,11 @@ export function LeadListContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [cityFilter, setCityFilter] = useState("");
+  const [pincodeFilter, setPincodeFilter] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
   const [draftStateFilter, setDraftStateFilter] = useState("");
   const [draftCityFilter, setDraftCityFilter] = useState("");
+  const [draftPincodeFilter, setDraftPincodeFilter] = useState("");
   const [draftCourseFilter, setDraftCourseFilter] = useState("");
   const [showFilterPopup, setShowFilterPopup] = useState(false);
   const [activeTab, setActiveTab] = useState<LeadStatus | "ALL">(
@@ -37,6 +39,7 @@ export function LeadListContent() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<number[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [tenantCourseOptions, setTenantCourseOptions] = useState<string[]>([]);
+  const [tenantPincodes, setTenantPincodes] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
@@ -53,12 +56,20 @@ export function LeadListContent() {
       .catch(() => setTenantCourseOptions([]));
   }, []);
 
+  useEffect(() => {
+    void api
+      .getLeadPincodes()
+      .then((response) => setTenantPincodes(response.pincodes))
+      .catch(() => setTenantPincodes([]));
+  }, []);
+
   const loadLeads = async () => {
     setLoading(true);
     try {
       const response = await api.getLeadsPage({
         state: stateFilter || undefined,
         city: cityFilter || undefined,
+        pincode: pincodeFilter || undefined,
         course: courseFilter || undefined,
         status: activeTab === "ALL" ? undefined : activeTab,
         search: searchTerm || undefined,
@@ -85,11 +96,12 @@ export function LeadListContent() {
 
   useEffect(() => {
     void loadLeads();
-  }, [stateFilter, cityFilter, courseFilter, activeTab, searchTerm, page, pageSize]);
+  }, [stateFilter, cityFilter, pincodeFilter, courseFilter, activeTab, searchTerm, page, pageSize]);
 
   const openFilterPopup = () => {
     setDraftStateFilter(stateFilter);
     setDraftCityFilter(cityFilter);
+    setDraftPincodeFilter(pincodeFilter);
     setDraftCourseFilter(courseFilter);
     setShowFilterPopup(true);
   };
@@ -97,6 +109,7 @@ export function LeadListContent() {
   const applyFilters = () => {
     setStateFilter(draftStateFilter.trim());
     setCityFilter(draftCityFilter.trim());
+    setPincodeFilter(draftPincodeFilter.trim());
     setCourseFilter(draftCourseFilter.trim());
     setPage(1);
     setShowFilterPopup(false);
@@ -105,9 +118,11 @@ export function LeadListContent() {
   const clearFilters = () => {
     setDraftStateFilter("");
     setDraftCityFilter("");
+    setDraftPincodeFilter("");
     setDraftCourseFilter("");
     setStateFilter("");
     setCityFilter("");
+    setPincodeFilter("");
     setCourseFilter("");
     setPage(1);
     setShowFilterPopup(false);
@@ -201,11 +216,12 @@ export function LeadListContent() {
               }}
               className="w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            {(stateFilter || cityFilter || courseFilter) && (
+            {(stateFilter || cityFilter || pincodeFilter || courseFilter) && (
               <div className="mt-3 text-xs text-slate-600">
                 Active filters:
                 {stateFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">State: {stateFilter}</span>}
                 {cityFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">City: {cityFilter}</span>}
+                {pincodeFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">Pincode: {pincodeFilter}</span>}
                 {courseFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">Course: {courseFilter}</span>}
               </div>
             )}
@@ -215,7 +231,7 @@ export function LeadListContent() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
               <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
                 <h3 className="text-lg font-bold text-slate-900">Apply Filters</h3>
-                <p className="mt-1 text-sm text-slate-600">Filter leads by State, City, and Course.</p>
+                <p className="mt-1 text-sm text-slate-600">Filter leads by State, City, Pincode, and Course.</p>
                 <div className="mt-4 space-y-3">
                   <select
                     value={draftStateFilter}
@@ -257,6 +273,18 @@ export function LeadListContent() {
                     {courseOptions.map((course) => (
                       <option key={course} value={course}>
                         {course}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={draftPincodeFilter}
+                    onChange={(e) => setDraftPincodeFilter(e.target.value)}
+                    className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">All pincodes</option>
+                    {tenantPincodes.map((pincode) => (
+                      <option key={pincode} value={pincode}>
+                        {pincode}
                       </option>
                     ))}
                   </select>

@@ -121,10 +121,11 @@ export const api = {
     }>("/dashboard/summary"),
 
   // Leads
-  getLeads: (filters?: { state?: string; city?: string; course?: string }) => {
+  getLeads: (filters?: { state?: string; city?: string; pincode?: string; course?: string }) => {
     const params = new URLSearchParams();
     if (filters?.state) params.append("state", filters.state);
     if (filters?.city) params.append("city", filters.city);
+    if (filters?.pincode) params.append("pincode", filters.pincode);
     if (filters?.course) params.append("course", filters.course);
     const query = params.toString();
     return request<Lead[]>(`/leads${query ? `?${query}` : ""}`);
@@ -132,6 +133,7 @@ export const api = {
   getLeadsPage: (filters?: {
     state?: string;
     city?: string;
+    pincode?: string;
     course?: string;
     status?: LeadStatus;
     search?: string;
@@ -141,6 +143,7 @@ export const api = {
     const params = new URLSearchParams();
     if (filters?.state) params.append("state", filters.state);
     if (filters?.city) params.append("city", filters.city);
+    if (filters?.pincode) params.append("pincode", filters.pincode);
     if (filters?.course) params.append("course", filters.course);
     if (filters?.status) params.append("status", filters.status);
     if (filters?.search) params.append("search", filters.search);
@@ -158,6 +161,7 @@ export const api = {
     }>(`/leads${query ? `?${query}` : ""}`);
   },
   getLead: (id: number) => request<Lead>(`/leads/${id}`),
+  getLeadPincodes: () => request<{ pincodes: string[] }>("/leads/meta/pincodes"),
   createLead: (payload: Partial<Lead>) =>
     request<Lead>("/leads", {
       method: "POST",
