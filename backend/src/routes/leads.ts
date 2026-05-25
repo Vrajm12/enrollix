@@ -46,6 +46,27 @@ const toNullable = (value: string | undefined) => {
   return trimmed ? trimmed : null;
 };
 
+const normalizeFilterToken = (value: string) => value.trim().toLowerCase();
+
+const cityAliases: Record<string, string[]> = {
+  dharashiv: ["dharashiv", "osmanabad"],
+  osmanabad: ["dharashiv", "osmanabad"],
+  "dharashiv(osmanabad)": ["dharashiv", "osmanabad"],
+  "dharashiv (osmanabad)": ["dharashiv", "osmanabad"],
+  ahilyanagar: ["ahilyanagar", "ahmednagar"],
+  ahmednagar: ["ahilyanagar", "ahmednagar"],
+  "chhatrapati sambhajinagar": ["chhatrapati sambhajinagar", "aurangabad"],
+  aurangabad: ["chhatrapati sambhajinagar", "aurangabad"]
+};
+
+const expandCityFilterTerms = (rawCity: string) => {
+  const normalized = normalizeFilterToken(rawCity);
+  const noParen = normalized.replace(/\s*\([^)]*\)\s*/g, "").trim();
+  const direct = cityAliases[normalized] ?? cityAliases[noParen];
+  if (direct) return direct;
+  return [noParen || normalized];
+};
+
 const parseLeadId = (idParam: string) => {
   const id = Number(idParam);
   return Number.isNaN(id) || id <= 0 ? null : id;
@@ -95,10 +116,11 @@ router.get(
     }
 
     if (city) {
+      const cityTerms = expandCityFilterTerms(city);
       andFilters.push({
         OR: [
-          { city: { contains: city, mode: "insensitive" } },
-          { address: { contains: city, mode: "insensitive" } }
+          ...cityTerms.map((term) => ({ city: { contains: term, mode: "insensitive" as const } })),
+          ...cityTerms.map((term) => ({ address: { contains: term, mode: "insensitive" as const } }))
         ]
       });
     }
