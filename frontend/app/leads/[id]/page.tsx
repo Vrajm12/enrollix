@@ -44,6 +44,7 @@ export default function LeadDetailPage() {
     course: "",
     source: "",
     address: "",
+    pincode: "",
     region: "",
     city: "",
     parentContact: ""
@@ -64,8 +65,12 @@ export default function LeadDetailPage() {
   }, [lead?.phone]);
   const cityOptions = useMemo(() => {
     if (!leadForm.region) return [];
-    return CITIES_BY_STATE[leadForm.region] ?? [];
-  }, [leadForm.region]);
+    const options = CITIES_BY_STATE[leadForm.region] ?? [];
+    if (leadForm.city && !options.includes(leadForm.city)) {
+      return [leadForm.city, ...options];
+    }
+    return options;
+  }, [leadForm.city, leadForm.region]);
 
   const loadData = async () => {
     if (!leadId || Number.isNaN(leadId)) {
@@ -90,6 +95,7 @@ export default function LeadDetailPage() {
         course: leadResponse.course ?? "",
         source: leadResponse.source ?? "",
         address: leadResponse.address ?? "",
+        pincode: leadResponse.pincode ?? "",
         region: leadResponse.region ?? "",
         city: leadResponse.city ?? "",
         parentContact: leadResponse.parentContact ?? ""
@@ -215,6 +221,7 @@ export default function LeadDetailPage() {
         course: leadForm.course.trim(),
         source: leadForm.source.trim(),
         address: leadForm.address.trim(),
+        pincode: leadForm.pincode.trim(),
         region: leadForm.region.trim(),
         city: leadForm.city.trim(),
         parentContact: leadForm.parentContact.trim(),
@@ -231,6 +238,7 @@ export default function LeadDetailPage() {
         course: updated.course ?? "",
         source: updated.source ?? "",
         address: updated.address ?? "",
+        pincode: updated.pincode ?? "",
         region: updated.region ?? "",
         city: updated.city ?? "",
         parentContact: updated.parentContact ?? ""
@@ -251,6 +259,7 @@ export default function LeadDetailPage() {
         ["Lead Activity Log"],
         ["Lead Name", lead.name],
         ["Phone", lead.phone],
+        ["Pincode", lead.pincode ?? ""],
         ["State", lead.region ?? ""],
         ["City", lead.city ?? ""],
         [],
@@ -442,6 +451,13 @@ export default function LeadDetailPage() {
                 onChange={(e) => setLeadForm((current) => ({ ...current, address: e.target.value }))}
                 placeholder="Address"
                 className="col-span-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 md:col-span-2"
+              />
+              <input
+                type="text"
+                value={leadForm.pincode}
+                onChange={(e) => setLeadForm((current) => ({ ...current, pincode: e.target.value }))}
+                placeholder="Pincode"
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
               />
               <select
                 value={leadForm.region}

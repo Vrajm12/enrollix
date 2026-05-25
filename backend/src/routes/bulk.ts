@@ -34,6 +34,7 @@ const importChunkSchema = z.object({
       phone: z.string().trim().min(1),
       email: z.string().trim().email().nullable(),
       address: z.string().trim().nullable(),
+      pincode: z.string().trim().nullable().optional(),
       parentContact: z.string().trim().nullable(),
       course: z.string().trim().nullable(),
       source: z.string().trim().nullable(),
@@ -98,6 +99,7 @@ type ParsedImportRow = {
   phone: string;
   email: string | null;
   address: string | null;
+  pincode: string | null;
   region: string | null;
   city: string | null;
   parentContact: string | null;
@@ -193,6 +195,7 @@ const exportableColumns = [
   "phone",
   "email",
   "address",
+  "pincode",
   "parent_contact",
   "course",
   "source",
@@ -207,6 +210,13 @@ const exportableColumns = [
 const nonEmpty = (value: string | undefined) => {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+};
+
+const normalizePincode = (value: string | null) => {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 6) return null;
+  return digits.slice(0, 6);
 };
 
 const normalizeHeader = (header: string): CanonicalHeader | null => {
@@ -263,48 +273,66 @@ const toTitleCase = (value: string) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 
-const CITY_TO_STATE: Record<string, string> = {
-  pune: "Maharashtra",
-  mumbai: "Maharashtra",
-  nagpur: "Maharashtra",
-  nashik: "Maharashtra",
-  kolhapur: "Maharashtra",
-  aurangabad: "Maharashtra",
-  "chhatrapati sambhajinagar": "Maharashtra",
-  ahmedabad: "Gujarat",
-  surat: "Gujarat",
-  vadodara: "Gujarat",
-  bengaluru: "Karnataka",
-  bangalore: "Karnataka",
-  mysuru: "Karnataka",
-  chennai: "Tamil Nadu",
-  coimbatore: "Tamil Nadu",
-  hyderabad: "Telangana",
-  warangal: "Telangana",
-  delhi: "Delhi",
-  "new delhi": "Delhi",
-  noida: "Uttar Pradesh",
-  gurugram: "Haryana",
-  gurgaon: "Haryana",
-  lucknow: "Uttar Pradesh",
-  kanpur: "Uttar Pradesh",
-  jaipur: "Rajasthan",
-  indore: "Madhya Pradesh",
-  bhopal: "Madhya Pradesh",
-  kolkata: "West Bengal",
-  howrah: "West Bengal",
-  patna: "Bihar",
-  bhubaneswar: "Odisha",
-  kochi: "Kerala",
-  trivandrum: "Kerala",
-  thiruvananthapuram: "Kerala",
-  chandigarh: "Chandigarh"
+const STATE_TO_CITIES: Record<string, string[]> = {
+  "Andaman and Nicobar Islands": ["Port Blair", "Diglipur", "Mayabunder", "Rangat"],
+  "Arunachal Pradesh": ["Itanagar", "Naharlagun", "Pasighat", "Tawang"],
+  Assam: ["Guwahati", "Dibrugarh", "Silchar", "Jorhat", "Nagaon"],
+  Bihar: ["Patna", "Gaya", "Muzaffarpur", "Bhagalpur", "Darbhanga"],
+  Chandigarh: ["Chandigarh"],
+  Chhattisgarh: ["Raipur", "Bhilai", "Bilaspur", "Korba", "Durg"],
+  "Dadra and Nagar Haveli and Daman and Diu": ["Daman", "Diu", "Silvassa"],
+  "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool", "Rajahmundry", "Tirupati"],
+  Delhi: ["New Delhi", "Dwarka", "Rohini", "Saket", "Karol Bagh", "Laxmi Nagar", "Delhi"],
+  Goa: ["Panaji", "Margao", "Vasco da Gama", "Mapusa", "Ponda"],
+  Gujarat: ["Ahmedabad", "Surat", "Vadodara", "Rajkot", "Bhavnagar", "Jamnagar", "Gandhinagar"],
+  Haryana: ["Gurugram", "Gurgaon", "Faridabad", "Panipat", "Ambala", "Hisar", "Karnal"],
+  "Himachal Pradesh": ["Shimla", "Dharamshala", "Solan", "Mandi", "Kullu"],
+  "Jammu and Kashmir": ["Srinagar", "Jammu", "Anantnag", "Baramulla"],
+  Jharkhand: ["Ranchi", "Jamshedpur", "Dhanbad", "Bokaro", "Hazaribagh"],
+  Karnataka: ["Bengaluru", "Bangalore", "Mysuru", "Mangaluru", "Hubballi", "Belagavi", "Ballari", "Davanagere"],
+  Kerala: ["Thiruvananthapuram", "Trivandrum", "Kochi", "Kozhikode", "Thrissur", "Kollam", "Kannur"],
+  Ladakh: ["Leh", "Kargil"],
+  Lakshadweep: ["Kavaratti", "Agatti", "Amini"],
+  "Madhya Pradesh": ["Bhopal", "Indore", "Gwalior", "Jabalpur", "Ujjain", "Sagar"],
+  Maharashtra: [
+    "Ahmednagar", "Akola", "Amravati", "Beed", "Bhandara", "Buldhana", "Chandrapur", "Chhatrapati Sambhajinagar",
+    "Dhule", "Gadchiroli", "Gondia", "Hingoli", "Jalgaon", "Jalna", "Kolhapur", "Latur", "Mumbai City",
+    "Mumbai Suburban", "Nagpur", "Nanded", "Nandurbar", "Nashik", "Dharashiv", "Palghar", "Parbhani", "Pune",
+    "Raigad", "Ratnagiri", "Sangli", "Satara", "Sindhudurg", "Solapur", "Thane", "Wardha", "Washim", "Yavatmal",
+    "Mumbai", "Aurangabad", "Osmanabad"
+  ],
+  Manipur: ["Imphal", "Thoubal", "Bishnupur", "Churachandpur"],
+  Meghalaya: ["Shillong", "Tura", "Jowai", "Nongstoin"],
+  Mizoram: ["Aizawl", "Lunglei", "Champhai", "Kolasib"],
+  Nagaland: ["Kohima", "Dimapur", "Mokokchung", "Tuensang"],
+  Odisha: ["Bhubaneswar", "Cuttack", "Rourkela", "Sambalpur", "Puri", "Berhampur"],
+  Puducherry: ["Puducherry", "Karaikal", "Mahe", "Yanam"],
+  Punjab: ["Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Bathinda", "Mohali"],
+  Rajasthan: ["Jaipur", "Udaipur", "Jodhpur", "Kota", "Ajmer", "Bikaner", "Alwar"],
+  Sikkim: ["Gangtok", "Namchi", "Gyalshing", "Mangan"],
+  "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Salem", "Tiruchirappalli", "Erode", "Tirunelveli"],
+  Telangana: ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam", "Mahbubnagar"],
+  Tripura: ["Agartala", "Udaipur", "Dharmanagar", "Kailashahar"],
+  Uttarakhand: ["Dehradun", "Haridwar", "Haldwani", "Roorkee", "Rudrapur"],
+  "Uttar Pradesh": ["Lucknow", "Kanpur", "Noida", "Ghaziabad", "Varanasi", "Prayagraj", "Agra", "Meerut", "Gorakhpur"],
+  "West Bengal": ["Kolkata", "Howrah", "Siliguri", "Durgapur", "Asansol", "Kharagpur"]
 };
+
+const CITY_TO_STATE: Record<string, string> = Object.entries(STATE_TO_CITIES).reduce(
+  (accumulator, [state, cities]) => {
+    for (const city of cities) {
+      accumulator[city.trim().toLowerCase()] = state;
+    }
+    return accumulator;
+  },
+  {} as Record<string, string>
+);
 
 const inferRegionAndCity = (input: {
   state: string | null;
   city: string | null;
   location: string | null;
+  pincode: string | null;
 }) => {
   let city = input.city ?? input.location;
   let region = input.state;
@@ -318,6 +346,23 @@ const inferRegionAndCity = (input: {
   const cityKey = city?.trim().toLowerCase() ?? "";
   if (!region && cityKey && CITY_TO_STATE[cityKey]) {
     region = CITY_TO_STATE[cityKey];
+  }
+
+  if (!region && input.pincode) {
+    const prefix = Number(input.pincode.slice(0, 2));
+    if (prefix >= 11 && prefix <= 28) region = "Delhi";
+    else if (prefix >= 30 && prefix <= 34) region = "Rajasthan";
+    else if (prefix >= 36 && prefix <= 39) region = "Gujarat";
+    else if (prefix >= 40 && prefix <= 44) region = "Maharashtra";
+    else if (prefix >= 45 && prefix <= 48) region = "Madhya Pradesh";
+    else if (prefix >= 50 && prefix <= 53) region = "Andhra Pradesh";
+    else if (prefix >= 56 && prefix <= 59) region = "Karnataka";
+    else if (prefix >= 60 && prefix <= 64) region = "Tamil Nadu";
+    else if (prefix >= 67 && prefix <= 69) region = "Kerala";
+    else if (prefix >= 70 && prefix <= 74) region = "West Bengal";
+    else if (prefix >= 75 && prefix <= 77) region = "Odisha";
+    else if (prefix >= 80 && prefix <= 85) region = "Bihar";
+    else if (prefix >= 90 && prefix <= 99) region = "Army Postal Service";
   }
 
   return {
@@ -439,10 +484,12 @@ const parseRowsFromCsv = async (
     const rawLocation = nonEmpty(getCell("location"));
     const rawState = nonEmpty(getCell("state"));
     const rawCity = nonEmpty(getCell("city"));
+    const pincode = normalizePincode(nonEmpty(getCell("pincode")));
     const inferredGeo = inferRegionAndCity({
       state: rawState,
       city: rawCity,
-      location: rawLocation
+      location: rawLocation,
+      pincode
     });
 
     if (!name) reasons.push("Name is required");
@@ -468,6 +515,7 @@ const parseRowsFromCsv = async (
             phone,
             email,
             address: nonEmpty(getCell("address")),
+            pincode,
             region: inferredGeo.region,
             city: inferredGeo.city,
             parentContact: nonEmpty(getCell("parent_contact")),
@@ -774,6 +822,7 @@ router.post(
                 phone: row.phone,
                 email: row.email,
                 address: row.address,
+                pincode: row.pincode,
                 region: row.region,
                 city: row.city,
                 parentContact: row.parentContact,
@@ -862,6 +911,7 @@ router.post(
               phone: row.phone,
               email: row.email,
               address: row.address,
+              pincode: row.pincode,
               region: null,
               city: null,
               parentContact: row.parentContact,
@@ -1053,6 +1103,7 @@ router.post(
       phone: "phone",
       email: "email",
       address: "address",
+      pincode: "pincode",
       parent_contact: "parent_contact",
       course: "course",
       source: "source",
@@ -1082,6 +1133,8 @@ router.post(
               return lead.email;
             case "address":
               return lead.address;
+            case "pincode":
+              return lead.pincode;
             case "parent_contact":
               return lead.parentContact;
             case "course":

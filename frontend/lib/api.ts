@@ -221,6 +221,7 @@ export const api = {
           phone: string;
           email: string | null;
           address: string | null;
+          pincode: string | null;
           parentContact: string | null;
           course: string | null;
           source: string | null;
@@ -256,6 +257,7 @@ export const api = {
           phone: string;
           email: string | null;
           address: string | null;
+          pincode: string | null;
           parentContact: string | null;
           course: string | null;
           source: string | null;
@@ -339,6 +341,7 @@ export const api = {
     phone: string;
     email: string | null;
     address: string | null;
+    pincode: string | null;
     parentContact: string | null;
     course: string | null;
     source: string | null;

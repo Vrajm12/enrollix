@@ -28,6 +28,7 @@ export interface Lead {
   phone: string;
   email: string | null;
   address: string | null;
+  pincode: string | null;
   region: string | null;
   city: string | null;
   parentContact: string | null;

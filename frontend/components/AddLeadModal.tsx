@@ -35,6 +35,7 @@ export function AddLeadModal({
     phone: string;
     course: string;
     source: string;
+    pincode: string;
     region: string;
     city: string;
     parentName: string;
@@ -45,6 +46,7 @@ export function AddLeadModal({
     phone: '',
     course: '',
     source: '',
+    pincode: '',
     region: '',
     city: '',
     parentName: '',
@@ -60,6 +62,7 @@ export function AddLeadModal({
       phone: '',
       course: '',
       source: '',
+      pincode: '',
       region: '',
       city: '',
       parentName: '',
@@ -183,6 +186,17 @@ export function AddLeadModal({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Pincode</label>
+                <Input
+                  type="text"
+                  placeholder="431122"
+                  value={formData.pincode}
+                  onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
+                  className="rounded-lg border-slate-200"
+                  disabled={isLoading}
+                />
+              </div>
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1 block">State</label>
                 <select
