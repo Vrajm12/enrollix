@@ -108,7 +108,7 @@ export function LeadListContent() {
 
   const applyFilters = () => {
     setStateFilter(draftStateFilter.trim());
-    setCityFilter(draftCityFilter.trim());
+    setCityFilter(normalizeCityValue(draftCityFilter));
     setPincodeFilter(draftPincodeFilter.trim());
     setCourseFilter(draftCourseFilter.trim());
     setPage(1);
@@ -476,3 +476,4 @@ export function LeadListContent() {
     </div>
   );
 }
+  const normalizeCityValue = (value: string) => value.replace(/\s*\([^)]*\)\s*/g, "").trim();
