@@ -14,6 +14,7 @@ import authRouter from "./routes/auth.js";
 import bulkRouter from "./routes/bulk.js";
 import dashboardRouter from "./routes/dashboard.js";
 import leadsRouter from "./routes/leads.js";
+import metaWebhookRouter from "./routes/metaWebhook.js";
 import messagingRouter from "./routes/messaging.js";
 import reportingRouter from "./routes/reporting.js";
 import usersRouter from "./routes/users.js";
@@ -181,6 +182,8 @@ app.get("/api/info", (_req, res) => {
     uptime: process.uptime()
   });
 });
+
+app.use("/integrations/meta", metaWebhookRouter);
 
 app.use("/auth", authLimiter, authRouter);
 app.use("/admin", apiLimiter, adminRouter);

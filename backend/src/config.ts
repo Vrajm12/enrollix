@@ -17,6 +17,8 @@ const envSchema = z.object({
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_WEBHOOK_TOKEN: z.string().optional(),
+  // Meta Lead Ads Webhook
+  META_VERIFY_TOKEN: z.string().optional(),
   // Twilio SMS
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
