@@ -130,6 +130,10 @@ export function LeadDetailPanel({ lead, onClose, loading }: LeadDetailPanelProps
               <p className="text-xs text-slate-500">City/Town/Village</p>
               <p className="text-sm font-medium text-slate-900">{lead.locality || "â€”"}</p>
             </div>
+            <div>
+              <p className="text-xs text-slate-500">Student Caste Category</p>
+              <p className="text-sm font-medium text-slate-900">{lead.studentCasteCategory || "â€”"}</p>
+            </div>
             {lead.parentContact && (
               <div>
                 <p className="text-xs text-slate-500">Parent Contact</p>

@@ -16,6 +16,18 @@ const MAX_UPLOAD_ROWS = 50_000;
 const MAX_PREVIEW_ROWS = 1_000;
 const DB_WRITE_CHUNK_SIZE = 1_000;
 const DUPLICATE_LOOKUP_CHUNK_SIZE = 1_000;
+const STUDENT_CASTE_CATEGORIES = [
+  "DT/VJ",
+  "NT-B",
+  "NT-C",
+  "NT-D",
+  "OBC",
+  "SBC",
+  "SEBC",
+  "OPEN",
+  "SC",
+  "ST"
+] as const;
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -35,6 +47,7 @@ const importChunkSchema = z.object({
       email: z.string().trim().email().nullable(),
       address: z.string().trim().nullable(),
       pincode: z.string().trim().nullable().optional(),
+      studentCasteCategory: z.enum(STUDENT_CASTE_CATEGORIES).nullable().optional(),
       locality: z.string().trim().nullable().optional(),
       parentContact: z.string().trim().nullable(),
       course: z.string().trim().nullable(),
@@ -86,6 +99,7 @@ type CanonicalHeader =
   | "city"
   | "locality"
   | "pincode"
+  | "student_caste_category"
   | "address"
   | "parent_contact"
   | "course"
@@ -102,6 +116,7 @@ type ParsedImportRow = {
   email: string | null;
   address: string | null;
   pincode: string | null;
+  studentCasteCategory: string | null;
   region: string | null;
   city: string | null;
   locality: string | null;
@@ -158,6 +173,11 @@ const headerAliases: Record<string, CanonicalHeader> = {
   city: "city",
   locality: "locality",
   pincode: "pincode",
+  student_caste_category: "student_caste_category",
+  caste_category: "student_caste_category",
+  student_category: "student_caste_category",
+  student_caste: "student_caste_category",
+  caste: "student_caste_category",
   email_id: "email",
   mail: "email",
   address: "address",
@@ -205,6 +225,7 @@ const exportableColumns = [
   "locality",
   "state",
   "pincode",
+  "student_caste_category",
   "parent_contact",
   "course",
   "source",
@@ -264,6 +285,14 @@ const parsePriority = (value: string | null) => {
   return Object.values(Priority).includes(normalized as Priority)
     ? { value: normalized as Priority, reason: null }
     : { value: null, reason: `Unsupported priority "${value}"` };
+};
+
+const parseStudentCasteCategory = (value: string | null) => {
+  if (!value) return { value: null, reason: null };
+  const normalized = value.trim().toUpperCase();
+  return (STUDENT_CASTE_CATEGORIES as readonly string[]).includes(normalized)
+    ? { value: normalized, reason: null }
+    : { value: null, reason: `Unsupported student_caste_category "${value}"` };
 };
 
 const parseNextFollowUp = (value: string | null) => {
@@ -538,10 +567,12 @@ const parseRowsFromCsv = async (
 
     const parsedStatus = parseStatus(nonEmpty(getCell("status")));
     const parsedPriority = parsePriority(nonEmpty(getCell("priority")));
+    const parsedStudentCasteCategory = parseStudentCasteCategory(nonEmpty(getCell("student_caste_category")));
     const parsedNextFollowUp = parseNextFollowUp(nonEmpty(getCell("next_follow_up")));
 
     if (parsedStatus.reason) reasons.push(parsedStatus.reason);
     if (parsedPriority.reason) reasons.push(parsedPriority.reason);
+    if (parsedStudentCasteCategory.reason) reasons.push(parsedStudentCasteCategory.reason);
     if (parsedNextFollowUp.reason) reasons.push(parsedNextFollowUp.reason);
 
     const normalized =
@@ -552,6 +583,7 @@ const parseRowsFromCsv = async (
             email,
             address: nonEmpty(getCell("address")),
             pincode,
+            studentCasteCategory: parsedStudentCasteCategory.value,
             region: inferredGeo.region,
             city: inferredGeo.city,
             locality: rawLocality ?? (rawCity ? rawLocation : null),
@@ -858,6 +890,7 @@ router.post(
                 email: row.email,
                 address: row.address,
                 pincode: row.pincode,
+                studentCasteCategory: row.studentCasteCategory,
                 region: row.region,
                 city: row.city,
                 locality: row.locality,
@@ -939,6 +972,7 @@ router.post(
               email: row.email,
               address: row.address,
               pincode: row.pincode,
+              studentCasteCategory: row.studentCasteCategory,
               region: null,
               city: null,
               locality: row.locality ?? null,
@@ -1135,6 +1169,7 @@ router.post(
       locality: "locality",
       state: "state",
       pincode: "pincode",
+      student_caste_category: "student_caste_category",
       parent_contact: "parent_contact",
       course: "course",
       source: "source",
@@ -1172,6 +1207,8 @@ router.post(
               return lead.region;
             case "pincode":
               return lead.pincode;
+            case "student_caste_category":
+              return lead.studentCasteCategory;
             case "parent_contact":
               return lead.parentContact;
             case "course":

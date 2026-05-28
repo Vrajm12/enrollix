@@ -38,6 +38,7 @@ type TeamInsight = {
 
 export default function TeamsPage() {
   const router = useRouter();
+  const [canAllocateLeads, setCanAllocateLeads] = useState(false);
   const [users, setUsers] = useState<TeamUser[]>([]);
   const [insights, setInsights] = useState<TeamInsight[]>([]);
   const [tenantSummary, setTenantSummary] = useState({
@@ -53,18 +54,27 @@ export default function TeamsPage() {
   const [tempPassword, setTempPassword] = useState("");
   const [form, setForm] = useState({ name: "", email: "", role: "COUNSELOR" as "ADMIN" | "COUNSELOR" });
   const [allocating, setAllocating] = useState(false);
+  const [allocationPincodes, setAllocationPincodes] = useState<string[]>([]);
+  const [availableLeadsForPincode, setAvailableLeadsForPincode] = useState<number | null>(null);
+  const [loadingPincodeSummary, setLoadingPincodeSummary] = useState(false);
   const [allocationForm, setAllocationForm] = useState({
     userId: "",
+    pincode: "",
     startLeadNumber: "",
     endLeadNumber: ""
   });
 
-  const loadUsers = async () => {
+  const loadUsers = async (includePincodes: boolean) => {
     try {
-      const [result, teamInsights] = await Promise.all([api.getTeamUsers(), api.getTeamInsights()]);
+      const [result, teamInsights, pincodeData] = await Promise.all([
+        api.getTeamUsers(),
+        api.getTeamInsights(),
+        includePincodes ? api.getLeadPincodes() : Promise.resolve({ pincodes: [] })
+      ]);
       setUsers(result.users);
       setInsights(teamInsights.users);
       setTenantSummary(teamInsights.tenantSummary);
+      setAllocationPincodes(pincodeData.pincodes);
       setError("");
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -92,7 +102,9 @@ export default function TeamsPage() {
       router.replace("/dashboard");
       return;
     }
-    void loadUsers();
+    const isTenantAdmin = user.role === "TENANT_ADMIN";
+    setCanAllocateLeads(isTenantAdmin);
+    void loadUsers(isTenantAdmin);
   }, [router]);
 
   const onSubmit = async (event: FormEvent) => {
@@ -107,7 +119,7 @@ export default function TeamsPage() {
       setTempPassword(created.temporaryPassword);
       setSuccess(`User created for ${created.user.email}. Share the temporary password securely.`);
       setForm({ name: "", email: "", role: "COUNSELOR" });
-      await loadUsers();
+      await loadUsers(canAllocateLeads);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create user");
     }
@@ -118,29 +130,86 @@ export default function TeamsPage() {
     setError("");
     setSuccess("");
 
+    if (!canAllocateLeads) {
+      setError("Only tenant admins can allocate leads.");
+      return;
+    }
+
     const userId = Number(allocationForm.userId);
     const startLeadNumber = Number(allocationForm.startLeadNumber);
     const endLeadNumber = Number(allocationForm.endLeadNumber);
 
-    if (!userId || !startLeadNumber || !endLeadNumber) {
-      setError("User and lead range are required.");
+    if (!userId || !allocationForm.pincode || !startLeadNumber || !endLeadNumber) {
+      setError("User, pincode, and lead range are required.");
+      return;
+    }
+
+    if (availableLeadsForPincode === null) {
+      setError("Lead availability is still loading for the selected pincode.");
+      return;
+    }
+
+    if (startLeadNumber > availableLeadsForPincode) {
+      setError(`Start lead number exceeds available leads for pincode ${allocationForm.pincode} (${availableLeadsForPincode}).`);
       return;
     }
 
     try {
       setAllocating(true);
-      const result = await api.allocateLeadRange({ userId, startLeadNumber, endLeadNumber });
+      const result = await api.allocateLeadRange({
+        userId,
+        pincode: allocationForm.pincode,
+        startLeadNumber,
+        endLeadNumber
+      });
       setSuccess(
-        `${result.message}. Tenant lead range: ${result.range.startLeadNumber}-${result.range.endLeadNumber}.`
+        `${result.message}. Pincode lead range: ${result.range.startLeadNumber}-${result.range.endLeadNumber}.`
       );
-      setAllocationForm({ userId: "", startLeadNumber: "", endLeadNumber: "" });
-      await loadUsers();
+      setAllocationForm({ userId: "", pincode: "", startLeadNumber: "", endLeadNumber: "" });
+      setAvailableLeadsForPincode(null);
+      await loadUsers(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to allocate leads");
     } finally {
       setAllocating(false);
     }
   };
+
+  useEffect(() => {
+    if (!canAllocateLeads) {
+      return;
+    }
+
+    if (!allocationForm.pincode) {
+      setAvailableLeadsForPincode(null);
+      return;
+    }
+
+    let ignore = false;
+    const loadPincodeSummary = async () => {
+      try {
+        setLoadingPincodeSummary(true);
+        const result = await api.getLeadAllocationPincodeSummary(allocationForm.pincode);
+        if (!ignore) {
+          setAvailableLeadsForPincode(result.availableLeads);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setAvailableLeadsForPincode(null);
+          setError(err instanceof Error ? err.message : "Unable to load pincode lead availability");
+        }
+      } finally {
+        if (!ignore) {
+          setLoadingPincodeSummary(false);
+        }
+      }
+    };
+
+    void loadPincodeSummary();
+    return () => {
+      ignore = true;
+    };
+  }, [allocationForm.pincode, canAllocateLeads]);
 
   if (loading) return <div className="p-6 text-sm text-slate-600">Loading team...</div>;
 
@@ -167,52 +236,81 @@ export default function TeamsPage() {
               <button className="w-full rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800" type="submit">Create User</button>
             </form>
 
-            <form onSubmit={onAllocate} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
-              <h2 className="text-lg font-semibold">Allocate Leads (Tenant Admin)</h2>
-              <p className="text-sm text-slate-600">Assign a tenant lead number range to one user. Example: 1 to 100.</p>
-              <select
-                className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                value={allocationForm.userId}
-                onChange={(e) => setAllocationForm((c) => ({ ...c, userId: e.target.value }))}
-                required
-              >
-                <option value="">Select user</option>
-                {users
-                  .filter((user) => user.role === "ADMIN" || user.role === "COUNSELOR")
-                  .map((user) => (
-                    <option key={user.id} value={String(user.id)}>
-                      {user.name} ({user.role})
+            {canAllocateLeads ? (
+              <form onSubmit={onAllocate} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                <h2 className="text-lg font-semibold">Allocate Leads (Tenant Admin)</h2>
+                <p className="text-sm text-slate-600">Select user and pincode, then assign a range from available leads in that pincode.</p>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  value={allocationForm.userId}
+                  onChange={(e) => setAllocationForm((c) => ({ ...c, userId: e.target.value }))}
+                  required
+                >
+                  <option value="">Select user</option>
+                  {users
+                    .filter((user) => user.role === "ADMIN" || user.role === "COUNSELOR")
+                    .map((user) => (
+                      <option key={user.id} value={String(user.id)}>
+                        {user.name} ({user.role})
+                      </option>
+                    ))}
+                </select>
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  value={allocationForm.pincode}
+                  onChange={(e) =>
+                    setAllocationForm((current) => ({
+                      ...current,
+                      pincode: e.target.value,
+                      startLeadNumber: "",
+                      endLeadNumber: ""
+                    }))
+                  }
+                  required
+                >
+                  <option value="">Select pincode</option>
+                  {allocationPincodes.map((pincode) => (
+                    <option key={pincode} value={pincode}>
+                      {pincode}
                     </option>
                   ))}
-              </select>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                  placeholder="Start lead number"
-                  value={allocationForm.startLeadNumber}
-                  onChange={(e) => setAllocationForm((c) => ({ ...c, startLeadNumber: e.target.value }))}
-                  required
-                />
-                <input
-                  type="number"
-                  min={1}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
-                  placeholder="End lead number"
-                  value={allocationForm.endLeadNumber}
-                  onChange={(e) => setAllocationForm((c) => ({ ...c, endLeadNumber: e.target.value }))}
-                  required
-                />
-              </div>
-              <button
-                className="w-full rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
-                type="submit"
-                disabled={allocating}
-              >
-                {allocating ? "Allocating..." : "Assign Lead Range"}
-              </button>
-            </form>
+                </select>
+                {allocationForm.pincode ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    {loadingPincodeSummary
+                      ? "Loading leads available..."
+                      : `Available leads in ${allocationForm.pincode}: ${availableLeadsForPincode ?? 0}`}
+                  </div>
+                ) : null}
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    placeholder="Start lead number"
+                    value={allocationForm.startLeadNumber}
+                    onChange={(e) => setAllocationForm((c) => ({ ...c, startLeadNumber: e.target.value }))}
+                    required
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                    placeholder="End lead number"
+                    value={allocationForm.endLeadNumber}
+                    onChange={(e) => setAllocationForm((c) => ({ ...c, endLeadNumber: e.target.value }))}
+                    required
+                  />
+                </div>
+                <button
+                  className="w-full rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
+                  type="submit"
+                  disabled={allocating || loadingPincodeSummary || !allocationForm.pincode}
+                >
+                  {allocating ? "Allocating..." : "Assign Lead Range"}
+                </button>
+              </form>
+            ) : null}
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm overflow-x-auto">

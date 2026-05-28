@@ -102,6 +102,7 @@ model Lead {
   city             String?
   locality         String?
   pincode          String?
+  studentCasteCategory String?  @map("student_caste_category")
   parentContact    String?     @map("parent_contact")
   course           String?
   source           String?

@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Sidebar from "@/components/Sidebar";
-import { ACTIVITY_TYPES, LEAD_STATUSES, SOURCES, COURSES } from "@/lib/constants";
+import {
+  ACTIVITY_TYPES,
+  LEAD_STATUSES,
+  SOURCES,
+  COURSES,
+  STUDENT_CASTE_CATEGORIES
+} from "@/lib/constants";
 import { CITIES_BY_STATE, INDIA_STATES } from "@/lib/indiaLocations";
 import { ApiError, api } from "@/lib/api";
 import { clearSession, getToken, getUser, hasSession } from "@/lib/auth";
@@ -45,6 +51,7 @@ export default function LeadDetailPage() {
     source: "",
     address: "",
     pincode: "",
+    studentCasteCategory: "",
     region: "",
     city: "",
     locality: "",
@@ -97,6 +104,7 @@ export default function LeadDetailPage() {
         source: leadResponse.source ?? "",
         address: leadResponse.address ?? "",
         pincode: leadResponse.pincode ?? "",
+        studentCasteCategory: leadResponse.studentCasteCategory ?? "",
         region: leadResponse.region ?? "",
         city: leadResponse.city ?? "",
         locality: leadResponse.locality ?? "",
@@ -224,6 +232,7 @@ export default function LeadDetailPage() {
         source: leadForm.source.trim(),
         address: leadForm.address.trim(),
         pincode: leadForm.pincode.trim(),
+        studentCasteCategory: leadForm.studentCasteCategory,
         region: leadForm.region.trim(),
         city: leadForm.city.trim(),
         locality: leadForm.locality.trim(),
@@ -242,6 +251,7 @@ export default function LeadDetailPage() {
         source: updated.source ?? "",
         address: updated.address ?? "",
         pincode: updated.pincode ?? "",
+        studentCasteCategory: updated.studentCasteCategory ?? "",
         region: updated.region ?? "",
         city: updated.city ?? "",
         locality: updated.locality ?? "",
@@ -264,6 +274,7 @@ export default function LeadDetailPage() {
         ["Lead Name", lead.name],
         ["Phone", lead.phone],
         ["Pincode", lead.pincode ?? ""],
+        ["Student Caste Category", lead.studentCasteCategory ?? ""],
         ["State", lead.region ?? ""],
         ["District", lead.city ?? ""],
         ["City/Town/Village", lead.locality ?? ""],
@@ -448,6 +459,20 @@ export default function LeadDetailPage() {
                 <option value="">Select source</option>
                 {SOURCES.map((source) => (
                   <option key={source} value={source}>{source}</option>
+                ))}
+              </select>
+              <select
+                value={leadForm.studentCasteCategory}
+                onChange={(e) =>
+                  setLeadForm((current) => ({ ...current, studentCasteCategory: e.target.value }))
+                }
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              >
+                <option value="">Student Caste Category</option>
+                {STUDENT_CASTE_CATEGORIES.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
                 ))}
               </select>
               <input

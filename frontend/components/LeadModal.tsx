@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { Lead, Priority } from "@/lib/types";
-import { COURSES } from "@/lib/constants";
+import { COURSES, STUDENT_CASTE_CATEGORIES } from "@/lib/constants";
 
 interface LeadModalProps {
   isOpen: boolean;
@@ -32,6 +32,7 @@ export function LeadModal({
     address: "",
     course: "",
     source: "",
+    studentCasteCategory: "",
     priority: "COLD",
     assignedTo: undefined
   });
@@ -70,6 +71,7 @@ export function LeadModal({
         address: "",
         course: "",
         source: "",
+        studentCasteCategory: "",
         priority: "COLD",
         assignedTo: undefined
       });
@@ -207,6 +209,24 @@ export function LeadModal({
               onChange={handleChange}
               placeholder="e.g., Website, Referral"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Student Caste Category
+            </label>
+            <select
+              name="studentCasteCategory"
+              value={formData.studentCasteCategory || ""}
+              onChange={handleChange}
+            >
+              <option value="">Select category</option>
+              {STUDENT_CASTE_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Assigned To (Admin only) */}

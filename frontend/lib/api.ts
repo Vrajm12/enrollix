@@ -230,6 +230,7 @@ export const api = {
           email: string | null;
           address: string | null;
           pincode: string | null;
+          studentCasteCategory: string | null;
           locality: string | null;
           parentContact: string | null;
           course: string | null;
@@ -267,6 +268,7 @@ export const api = {
           email: string | null;
           address: string | null;
           pincode: string | null;
+          studentCasteCategory: string | null;
           locality: string | null;
           parentContact: string | null;
           course: string | null;
@@ -352,6 +354,7 @@ export const api = {
     email: string | null;
     address: string | null;
     pincode: string | null;
+    studentCasteCategory?: string | null;
     locality: string | null;
     parentContact: string | null;
     course: string | null;
@@ -458,18 +461,24 @@ export const api = {
       };
       temporaryPassword: string;
     }>("/users/team", { method: "POST", body: payload }),
-  allocateLeadRange: (payload: { userId: number; startLeadNumber: number; endLeadNumber: number }) =>
+  allocateLeadRange: (payload: { userId: number; startLeadNumber: number; endLeadNumber: number; pincode?: string }) =>
     request<{
       success: boolean;
       message: string;
       allocatedCount: number;
       range: { startLeadNumber: number; endLeadNumber: number };
-      totalTenantLeads: number;
+      pincode: string | null;
+      totalAvailableLeads: number;
       assignee: { id: number; name: string; email: string; role: "ADMIN" | "COUNSELOR" };
     }>("/users/team/allocate-leads", {
       method: "POST",
       body: payload
     }),
+  getLeadAllocationPincodeSummary: (pincode: string) =>
+    request<{
+      pincode: string;
+      availableLeads: number;
+    }>(`/users/team/allocate-leads/pincode-summary?pincode=${encodeURIComponent(pincode)}`),
   getTeamInsights: () =>
     request<{
       tenantSummary: {
@@ -523,10 +532,16 @@ export const api = {
       body: { leadId, message },
     }),
   getSMSThread: (leadId: number) => request(`/messaging/sms/thread/${leadId}`),
-  sendBulkMessage: (leadIds: number[], message: string, type: "whatsapp" | "sms") =>
+  sendBulkMessage: (
+    leadIds: number[],
+    message: string,
+    type: "whatsapp" | "sms" | "email",
+    subject?: string,
+    dryRun?: boolean
+  ) =>
     request("/messaging/bulk/send", {
       method: "POST",
-      body: { leadIds, message, type },
+      body: { leadIds, message, type, subject, dryRun },
     }),
   getMessagingStats: () => request("/messaging/stats"),
 

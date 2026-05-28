@@ -145,6 +145,14 @@ export function LeadDetailDrawer({
                   </Badge>
                 </div>
               )}
+              {lead.studentCasteCategory && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-600 font-medium">Student Caste Category:</span>
+                  <Badge variant="outline" className="text-xs">
+                    {lead.studentCasteCategory}
+                  </Badge>
+                </div>
+              )}
             </div>
 
             {/* Divider */}

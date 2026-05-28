@@ -29,6 +29,7 @@ export interface Lead {
   email: string | null;
   address: string | null;
   pincode: string | null;
+  studentCasteCategory?: string | null;
   region: string | null;
   city: string | null;
   locality: string | null;

@@ -8,6 +8,19 @@ import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCac
 
 const router = Router();
 
+const STUDENT_CASTE_CATEGORIES = [
+  "DT/VJ",
+  "NT-B",
+  "NT-C",
+  "NT-D",
+  "OBC",
+  "SBC",
+  "SEBC",
+  "OPEN",
+  "SC",
+  "ST"
+] as const;
+
 const leadBaseSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   phone: z.string().trim().min(1, "Phone is required"),
@@ -17,6 +30,7 @@ const leadBaseSchema = z.object({
   city: z.string().trim().optional().or(z.literal("")),
   locality: z.string().trim().optional().or(z.literal("")),
   pincode: z.string().trim().optional().or(z.literal("")),
+  studentCasteCategory: z.enum(STUDENT_CASTE_CATEGORIES).optional().or(z.literal("")),
   parentContact: z.string().trim().optional().or(z.literal("")),
   course: z.string().trim().optional().or(z.literal("")),
   source: z.string().trim().optional().or(z.literal("")),
@@ -199,6 +213,7 @@ router.get(
           city: true,
           locality: true,
           pincode: true,
+          studentCasteCategory: true,
           parentContact: true,
           course: true,
           source: true,
@@ -402,6 +417,7 @@ router.post(
         city: toNullable(payload.city),
         locality: toNullable(payload.locality),
         pincode: toNullable(payload.pincode),
+        studentCasteCategory: toNullable(payload.studentCasteCategory),
         parentContact: toNullable(payload.parentContact),
         course: toNullable(payload.course),
         source: toNullable(payload.source),
@@ -484,6 +500,7 @@ router.put(
         city: toNullable(payload.city),
         locality: toNullable(payload.locality),
         pincode: toNullable(payload.pincode),
+        studentCasteCategory: toNullable(payload.studentCasteCategory),
         parentContact: toNullable(payload.parentContact),
         course: toNullable(payload.course),
         source: toNullable(payload.source),

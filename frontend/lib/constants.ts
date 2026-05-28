@@ -32,3 +32,16 @@ export const SOURCES = [
   "Advertisement",
   "Walk-in"
 ];
+
+export const STUDENT_CASTE_CATEGORIES = [
+  "DT/VJ",
+  "NT-B",
+  "NT-C",
+  "NT-D",
+  "OBC",
+  "SBC",
+  "SEBC",
+  "OPEN",
+  "SC",
+  "ST"
+] as const;

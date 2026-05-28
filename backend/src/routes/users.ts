@@ -20,7 +20,8 @@ const createTeamMemberSchema = z.object({
 const allocateLeadsSchema = z.object({
   userId: z.number().int().positive(),
   startLeadNumber: z.number().int().positive(),
-  endLeadNumber: z.number().int().positive()
+  endLeadNumber: z.number().int().positive(),
+  pincode: z.string().trim().min(1).optional()
 }).refine((payload) => payload.endLeadNumber >= payload.startLeadNumber, {
   message: "endLeadNumber must be greater than or equal to startLeadNumber",
   path: ["endLeadNumber"]
@@ -487,7 +488,7 @@ router.post(
       return res.status(400).json({ message: "Invalid allocation payload", errors: parsed.error.flatten() });
     }
 
-    const { userId, startLeadNumber, endLeadNumber } = parsed.data;
+    const { userId, startLeadNumber, endLeadNumber, pincode } = parsed.data;
 
     const assignee = await prisma.user.findFirst({
       where: {
@@ -502,21 +503,36 @@ router.post(
       return res.status(404).json({ message: "Target user not found in this tenant" });
     }
 
-    const totalTenantLeads = await prisma.lead.count({
-      where: { tenantId: req.user.tenantId }
+    const leadScopeWhere = {
+      tenantId: req.user.tenantId,
+      ...(pincode ? { pincode } : {})
+    };
+
+    const totalScopedLeads = await prisma.lead.count({
+      where: leadScopeWhere
     });
 
-    if (startLeadNumber > totalTenantLeads) {
+    if (totalScopedLeads === 0) {
       return res.status(400).json({
-        message: `Start lead number exceeds tenant lead count (${totalTenantLeads})`
+        message: pincode
+          ? `No leads found for pincode ${pincode}`
+          : "No leads found for allocation"
       });
     }
 
-    const normalizedEnd = Math.min(endLeadNumber, totalTenantLeads);
+    if (startLeadNumber > totalScopedLeads) {
+      return res.status(400).json({
+        message: pincode
+          ? `Start lead number exceeds available leads for pincode ${pincode} (${totalScopedLeads})`
+          : `Start lead number exceeds tenant lead count (${totalScopedLeads})`
+      });
+    }
+
+    const normalizedEnd = Math.min(endLeadNumber, totalScopedLeads);
     const take = normalizedEnd - startLeadNumber + 1;
 
     const targetLeads = await prisma.lead.findMany({
-      where: { tenantId: req.user.tenantId },
+      where: leadScopeWhere,
       select: { id: true },
       orderBy: { id: "asc" },
       skip: startLeadNumber - 1,
@@ -538,11 +554,38 @@ router.post(
 
     return res.json({
       success: true,
-      message: `Allocated ${result.count} lead(s) to ${assignee.name}`,
+      message: `Allocated ${result.count} lead(s) to ${assignee.name}${pincode ? ` for pincode ${pincode}` : ""}`,
       allocatedCount: result.count,
       range: { startLeadNumber, endLeadNumber: normalizedEnd },
-      totalTenantLeads,
+      pincode: pincode ?? null,
+      totalAvailableLeads: totalScopedLeads,
       assignee
+    });
+  })
+);
+
+router.get(
+  "/team/allocate-leads/pincode-summary",
+  asyncHandler(async (req, res) => {
+    if (!req.user || req.user.role !== Role.TENANT_ADMIN) {
+      return res.status(403).json({ message: "Only tenant admins can view allocation summary" });
+    }
+
+    const pincode = typeof req.query.pincode === "string" ? req.query.pincode.trim() : "";
+    if (!pincode) {
+      return res.status(400).json({ message: "pincode query parameter is required" });
+    }
+
+    const totalLeads = await prisma.lead.count({
+      where: {
+        tenantId: req.user.tenantId,
+        pincode
+      }
+    });
+
+    return res.json({
+      pincode,
+      availableLeads: totalLeads
     });
   })
 );

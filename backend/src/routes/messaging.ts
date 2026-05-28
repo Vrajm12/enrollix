@@ -7,6 +7,7 @@ import { validateResourceTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { env } from "../config.js";
 import { twilioService } from "../services/twilio.js";
+import { emailService } from "../services/email.js";
 
 const router = Router();
 
@@ -25,8 +26,20 @@ const sendSMSSchema = z.object({
 const bulkMessageSchema = z.object({
   leadIds: z.array(z.number().int().positive()).min(1),
   message: z.string().min(1, "Message is required"),
-  type: z.enum(["whatsapp", "sms"])
+  type: z.enum(["whatsapp", "sms", "email"]),
+  subject: z.string().trim().max(200).optional(),
+  dryRun: z.boolean().optional()
+}).superRefine((value, ctx) => {
+  if (value.type === "email" && (!value.subject || value.subject.length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Subject is required for email",
+      path: ["subject"]
+    });
+  }
 });
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // WhatsApp Endpoints
 router.post(
@@ -252,6 +265,7 @@ router.post(
     }
 
     const results = [];
+    const dryRun = parsed.data.dryRun ?? false;
 
     if (parsed.data.type === "whatsapp") {
       for (const lead of leads) {
@@ -268,7 +282,7 @@ router.post(
         });
         results.push(message);
       }
-    } else {
+    } else if (parsed.data.type === "sms") {
       for (const lead of leads) {
         try {
           // Send SMS via Twilio
@@ -307,6 +321,107 @@ router.post(
           results.push(message);
         }
       }
+    } else {
+      if (!dryRun && !emailService.isConfigured()) {
+        return res.status(400).json({
+          message: "SMTP is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM."
+        });
+      }
+
+      const leadsWithEmail = leads.filter((lead) => Boolean(lead.email && lead.email.trim().length > 0));
+      const skippedNoEmail = leads.length - leadsWithEmail.length;
+      const validEmailLeads = leadsWithEmail.filter((lead) =>
+        z.string().email().safeParse((lead.email ?? "").trim()).success
+      );
+      const skippedInvalidEmail = leadsWithEmail.length - validEmailLeads.length;
+      const maxRecipients = Math.max(1, env.EMAIL_BULK_MAX_RECIPIENTS);
+      const sendDelayMs = Math.max(0, env.EMAIL_BULK_DELAY_MS);
+
+      if (validEmailLeads.length > maxRecipients) {
+        return res.status(400).json({
+          message: `Email bulk limit exceeded. Selected ${validEmailLeads.length} valid email leads, but current local cap is ${maxRecipients}.`,
+          maxRecipients
+        });
+      }
+
+      for (let index = 0; index < validEmailLeads.length; index += 1) {
+        const lead = validEmailLeads[index];
+        try {
+          const leadContext = {
+            name: lead.name,
+            course: lead.course,
+            phone: lead.phone,
+            email: lead.email!,
+            district: lead.city,
+            locality: lead.locality,
+            state: lead.region,
+            pincode: lead.pincode
+          };
+
+          if (dryRun) {
+            const preview = emailService.renderLeadTemplate({
+              subject: parsed.data.subject!,
+              message: parsed.data.message,
+              lead: leadContext
+            });
+
+            results.push({
+              leadId: lead.id,
+              email: lead.email,
+              status: "DRY_RUN",
+              previewSubject: preview.subject,
+              previewBody: preview.text.slice(0, 200)
+            });
+            continue;
+          }
+
+          const sent = await emailService.sendLeadEmail({
+            to: lead.email!,
+            subject: parsed.data.subject!,
+            message: parsed.data.message,
+            lead: leadContext
+          });
+
+          results.push({
+            leadId: lead.id,
+            email: lead.email,
+            status: "SENT",
+            messageId: sent.messageId
+          });
+        } catch (error) {
+          results.push({
+            leadId: lead.id,
+            email: lead.email,
+            status: "FAILED",
+            error: error instanceof Error ? error.message : "Unknown email send error"
+          });
+        }
+
+        if (!dryRun && sendDelayMs > 0 && index < validEmailLeads.length - 1) {
+          // Local throttle keeps SMTP usage and app load under control.
+          // eslint-disable-next-line no-await-in-loop
+          await sleep(sendDelayMs);
+        }
+      }
+
+      const sentCount = results.filter((entry) => entry.status === "SENT").length;
+      const failedCount = results.filter((entry) => entry.status === "FAILED").length;
+      const dryRunCount = results.filter((entry) => entry.status === "DRY_RUN").length;
+
+      return res.status(201).json({
+        type: parsed.data.type,
+        dryRun,
+        totalMessages: results.length,
+        selectedLeads: leads.length,
+        skippedNoEmail,
+        skippedInvalidEmail,
+        sentCount,
+        failedCount,
+        dryRunCount,
+        maxRecipients,
+        sendDelayMs,
+        messages: results
+      });
     }
 
     return res.status(201).json({

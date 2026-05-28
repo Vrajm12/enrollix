@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { COURSES, SOURCES } from '@/lib/constants';
+import { COURSES, SOURCES, STUDENT_CASTE_CATEGORIES } from '@/lib/constants';
 import { CITIES_BY_STATE, INDIA_STATES } from '@/lib/indiaLocations';
 
 interface AddLeadModalProps {
@@ -36,6 +36,7 @@ export function AddLeadModal({
     course: string;
     source: string;
     pincode: string;
+    studentCasteCategory: string;
     region: string;
     city: string;
     locality: string;
@@ -48,6 +49,7 @@ export function AddLeadModal({
     course: '',
     source: '',
     pincode: '',
+    studentCasteCategory: '',
     region: '',
     city: '',
     locality: '',
@@ -65,6 +67,7 @@ export function AddLeadModal({
       course: '',
       source: '',
       pincode: '',
+      studentCasteCategory: '',
       region: '',
       city: '',
       locality: '',
@@ -199,6 +202,22 @@ export function AddLeadModal({
                   className="rounded-lg border-slate-200"
                   disabled={isLoading}
                 />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">Student Caste Category</label>
+                <select
+                  value={formData.studentCasteCategory}
+                  onChange={(e) => setFormData({ ...formData, studentCasteCategory: e.target.value })}
+                  disabled={isLoading}
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">Select category</option>
+                  {STUDENT_CASTE_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1 block">State</label>

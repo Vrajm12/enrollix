@@ -16,7 +16,7 @@ type ActiveTab = 'import' | 'messaging' | 'updates' | 'export';
 type FilterStatus = LeadStatus | 'ALL';
 type FilterPriority = Priority | 'ALL';
 type AssignedFilter = 'ALL' | 'UNASSIGNED' | `${number}`;
-type MessageChannel = 'whatsapp' | 'sms';
+type MessageChannel = 'whatsapp' | 'sms' | 'email';
 
 type Counselor = {
   id: number;
@@ -34,6 +34,7 @@ type ImportPreviewRow = {
     email: string | null;
     address: string | null;
     pincode: string | null;
+    studentCasteCategory: string | null;
     locality: string | null;
     parentContact: string | null;
     course: string | null;
@@ -75,6 +76,7 @@ const OPTIONAL_CSV_COLUMNS = [
   'city',
   'locality',
   'pincode',
+  'student_caste_category',
   'address',
   'parent_contact',
   'course',
@@ -103,6 +105,12 @@ const MESSAGE_TEMPLATES: MessageTemplate[] = [
     channel: 'whatsapp',
     body: 'Please keep your marksheets, ID proof, and contact details ready for the admission discussion.',
   },
+  {
+    id: 4,
+    name: 'Email follow-up',
+    channel: 'email',
+    body: 'Hi {{name}},\n\nThank you for your interest in {{course}}.\nOur admissions team will contact you soon.\n\nRegards,\nGuruverse Team',
+  },
 ];
 const EXPORT_COLUMNS = [
   { value: 'sr_no', label: 'Sr. no' },
@@ -114,6 +122,7 @@ const EXPORT_COLUMNS = [
   { value: 'city', label: 'District' },
   { value: 'locality', label: 'City/Town/Village' },
   { value: 'pincode', label: 'Pincode' },
+  { value: 'student_caste_category', label: 'Student Caste Category' },
   { value: 'parent_contact', label: 'Parent contact' },
   { value: 'course', label: 'Course' },
   { value: 'source', label: 'Source' },
@@ -189,6 +198,8 @@ export default function BulkActionsClient() {
   });
   const [progressNow, setProgressNow] = useState(Date.now());
   const [messageChannel, setMessageChannel] = useState<MessageChannel>('whatsapp');
+  const [messageSubject, setMessageSubject] = useState('');
+  const [messageDryRun, setMessageDryRun] = useState(true);
   const [messageText, setMessageText] = useState('');
   const [messageStatusFilter, setMessageStatusFilter] = useState<FilterStatus>('ALL');
   const [messagePriorityFilter, setMessagePriorityFilter] = useState<FilterPriority>('ALL');
@@ -416,15 +427,52 @@ export default function BulkActionsClient() {
       setPageError('Enter a message before sending.');
       return;
     }
+    if (messageChannel === 'email' && !messageSubject.trim()) {
+      setPageError('Enter an email subject before sending.');
+      return;
+    }
 
     resetFeedback();
     setMessageLoading(true);
 
     try {
-      await api.sendBulkMessage(messageLeadIds, messageText.trim(), messageChannel);
-      setPageSuccess(`Queued ${messageChannel} message for ${messageLeadIds.length} lead(s).`);
+      const response = await api.sendBulkMessage(
+        messageLeadIds,
+        messageText.trim(),
+        messageChannel,
+        messageChannel === 'email' ? messageSubject.trim() : undefined,
+        messageChannel === 'email' ? messageDryRun : undefined
+      ) as {
+        sentCount?: number;
+        failedCount?: number;
+        skippedNoEmail?: number;
+        skippedInvalidEmail?: number;
+        dryRunCount?: number;
+        dryRun?: boolean;
+      };
+
+      if (messageChannel === 'email') {
+        const sent = response.sentCount ?? 0;
+        const failed = response.failedCount ?? 0;
+        const skipped = response.skippedNoEmail ?? 0;
+        const invalid = response.skippedInvalidEmail ?? 0;
+        if (response.dryRun) {
+          const dryRunCount = response.dryRunCount ?? 0;
+          setPageSuccess(
+            `Dry run complete: ${dryRunCount} previewed, ${skipped} skipped (no email), ${invalid} skipped (invalid email).`
+          );
+        } else {
+          setPageSuccess(
+            `Email run finished: ${sent} sent, ${failed} failed, ${skipped} skipped (no email), ${invalid} skipped (invalid email).`
+          );
+        }
+      } else {
+        setPageSuccess(`Queued ${messageChannel} message for ${messageLeadIds.length} lead(s).`);
+      }
+
       setMessageLeadIds([]);
       setMessageText('');
+      setMessageSubject('');
     } catch (error) {
       handleApiError(error, 'Unable to send bulk message');
     } finally {
@@ -844,6 +892,10 @@ export default function BulkActionsClient() {
                 type="button"
                 onClick={() => {
                   setMessageChannel(template.channel);
+                  setMessageSubject(
+                    template.channel === 'email' ? 'Admission Update from Guruverse' : ''
+                  );
+                  setMessageDryRun(template.channel === 'email');
                   setMessageText(template.body);
                 }}
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 text-left transition hover:border-blue-300 hover:bg-blue-50/40"
@@ -885,7 +937,7 @@ export default function BulkActionsClient() {
             </div>
           </div>
           <p className="mt-4 text-sm text-slate-500">
-            Only SMS and WhatsApp are enabled here because those are the supported backend channels.
+            Use placeholders like {'{{name}}'}, {'{{course}}'}, {'{{district}}'}, and {'{{locality}}'} in email subject/body.
           </p>
         </div>
       </div>
@@ -903,21 +955,50 @@ export default function BulkActionsClient() {
         <div className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-slate-900">Compose message</h2>
           <div className="mt-4 flex gap-3">
-            {(['whatsapp', 'sms'] as MessageChannel[]).map((channel) => (
+            {(['whatsapp', 'sms', 'email'] as MessageChannel[]).map((channel) => (
               <button
                 key={channel}
                 type="button"
-                onClick={() => setMessageChannel(channel)}
+                onClick={() => {
+                  setMessageChannel(channel);
+                  if (channel === 'email') {
+                    setMessageDryRun(true);
+                  }
+                }}
                 className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${
                   messageChannel === channel
                     ? 'bg-blue-600 text-white'
                     : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                {channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}
+                {channel === 'email' ? 'Email' : channel === 'whatsapp' ? 'WhatsApp' : 'SMS'}
               </button>
             ))}
           </div>
+
+          {messageChannel === 'email' ? (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Email subject</label>
+                <input
+                  type="text"
+                  value={messageSubject}
+                  onChange={(event) => setMessageSubject(event.target.value)}
+                  placeholder="Admission update for {{name}}"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-blue-400"
+                />
+              </div>
+              <label className="inline-flex items-center gap-2 text-sm text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={messageDryRun}
+                  onChange={(event) => setMessageDryRun(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                Dry run (preview/validate only, do not send real emails)
+              </label>
+            </div>
+          ) : null}
 
           <div className="mt-4">
             <label className="mb-2 block text-sm font-semibold text-slate-700">Message body</label>

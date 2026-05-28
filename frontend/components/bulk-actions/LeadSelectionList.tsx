@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { Lead } from '@/lib/types';
 
 type LeadSelectionListProps = {
@@ -38,7 +39,15 @@ export default function LeadSelectionList({
   onClear,
   emptyMessage,
 }: LeadSelectionListProps) {
+  const CHUNK_SIZE = 200;
   const selectedCount = selectedIds.length;
+  const [visibleCount, setVisibleCount] = useState(CHUNK_SIZE);
+
+  useEffect(() => {
+    setVisibleCount(CHUNK_SIZE);
+  }, [leads.length]);
+
+  const visibleLeads = useMemo(() => leads.slice(0, visibleCount), [leads, visibleCount]);
 
   return (
     <div className="rounded-2xl border border-slate-200/70 bg-white shadow-sm">
@@ -71,7 +80,7 @@ export default function LeadSelectionList({
         <div className="px-5 py-10 text-center text-sm text-slate-500">{emptyMessage}</div>
       ) : (
         <div className="max-h-[26rem] divide-y divide-slate-100 overflow-y-auto">
-          {leads.map((lead) => {
+          {visibleLeads.map((lead) => {
             const isSelected = selectedIds.includes(lead.id);
 
             return (
@@ -109,6 +118,17 @@ export default function LeadSelectionList({
               </label>
             );
           })}
+          {visibleCount < leads.length ? (
+            <div className="px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((current) => Math.min(current + CHUNK_SIZE, leads.length))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+              >
+                Show {Math.min(CHUNK_SIZE, leads.length - visibleCount)} more ({leads.length - visibleCount} remaining)
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
