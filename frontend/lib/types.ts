@@ -31,6 +31,7 @@ export interface Lead {
   pincode: string | null;
   region: string | null;
   city: string | null;
+  locality: string | null;
   parentContact: string | null;
   course: string | null;
   source: string | null;

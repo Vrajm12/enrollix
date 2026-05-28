@@ -35,6 +35,7 @@ const importChunkSchema = z.object({
       email: z.string().trim().email().nullable(),
       address: z.string().trim().nullable(),
       pincode: z.string().trim().nullable().optional(),
+      locality: z.string().trim().nullable().optional(),
       parentContact: z.string().trim().nullable(),
       course: z.string().trim().nullable(),
       source: z.string().trim().nullable(),
@@ -83,6 +84,7 @@ type CanonicalHeader =
   | "location"
   | "state"
   | "city"
+  | "locality"
   | "pincode"
   | "address"
   | "parent_contact"
@@ -102,6 +104,7 @@ type ParsedImportRow = {
   pincode: string | null;
   region: string | null;
   city: string | null;
+  locality: string | null;
   parentContact: string | null;
   course: string | null;
   source: string | null;
@@ -153,6 +156,7 @@ const headerAliases: Record<string, CanonicalHeader> = {
   location: "location",
   state: "state",
   city: "city",
+  locality: "locality",
   pincode: "pincode",
   email_id: "email",
   mail: "email",
@@ -174,8 +178,11 @@ const headerAliases: Record<string, CanonicalHeader> = {
   follow_up: "next_follow_up",
   followup: "next_follow_up",
   district: "city",
-  town: "city",
-  village: "city",
+  town: "locality",
+  village: "locality",
+  locality_name: "locality",
+  city_town_village: "locality",
+  city_village: "locality",
   region: "state",
   state_name: "state",
   city_name: "city",
@@ -194,6 +201,9 @@ const exportableColumns = [
   "phone",
   "email",
   "address",
+  "city",
+  "locality",
+  "state",
   "pincode",
   "parent_contact",
   "course",
@@ -510,6 +520,7 @@ const parseRowsFromCsv = async (
     const rawLocation = nonEmpty(getCell("location"));
     const rawState = nonEmpty(getCell("state"));
     const rawCity = nonEmpty(getCell("city"));
+    const rawLocality = nonEmpty(getCell("locality"));
     const pincode = normalizePincode(nonEmpty(getCell("pincode")));
     const inferredGeo = inferRegionAndCity({
       state: rawState,
@@ -543,6 +554,7 @@ const parseRowsFromCsv = async (
             pincode,
             region: inferredGeo.region,
             city: inferredGeo.city,
+            locality: rawLocality ?? (rawCity ? rawLocation : null),
             parentContact: nonEmpty(getCell("parent_contact")),
             course,
             source: nonEmpty(getCell("source")),
@@ -848,6 +860,7 @@ router.post(
                 pincode: row.pincode,
                 region: row.region,
                 city: row.city,
+                locality: row.locality,
                 parentContact: row.parentContact,
                 course: row.course,
                 source: row.source,
@@ -928,6 +941,7 @@ router.post(
               pincode: row.pincode,
               region: null,
               city: null,
+              locality: row.locality ?? null,
               parentContact: row.parentContact,
               course: row.course,
               source: row.source,
@@ -1117,6 +1131,9 @@ router.post(
       phone: "phone",
       email: "email",
       address: "address",
+      city: "district",
+      locality: "locality",
+      state: "state",
       pincode: "pincode",
       parent_contact: "parent_contact",
       course: "course",
@@ -1147,6 +1164,12 @@ router.post(
               return lead.email;
             case "address":
               return lead.address;
+            case "city":
+              return lead.city;
+            case "locality":
+              return lead.locality;
+            case "state":
+              return lead.region;
             case "pincode":
               return lead.pincode;
             case "parent_contact":

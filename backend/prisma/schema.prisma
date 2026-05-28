@@ -100,6 +100,7 @@ model Lead {
   address          String?
   region           String?
   city             String?
+  locality         String?
   pincode          String?
   parentContact    String?     @map("parent_contact")
   course           String?
@@ -121,6 +122,7 @@ model Lead {
   @@index([tenantId, priority])
   @@index([tenantId, nextFollowUp])
   @@index([tenantId, city])
+  @@index([tenantId, locality])
   @@index([tenantId, region])
   @@index([tenantId, pincode])
   @@index([assignedTo])

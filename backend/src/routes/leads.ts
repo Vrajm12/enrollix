@@ -15,6 +15,7 @@ const leadBaseSchema = z.object({
   address: z.string().trim().optional().or(z.literal("")),
   region: z.string().trim().optional().or(z.literal("")),
   city: z.string().trim().optional().or(z.literal("")),
+  locality: z.string().trim().optional().or(z.literal("")),
   pincode: z.string().trim().optional().or(z.literal("")),
   parentContact: z.string().trim().optional().or(z.literal("")),
   course: z.string().trim().optional().or(z.literal("")),
@@ -91,6 +92,7 @@ router.get(
           ? req.query.region.trim()
           : "";
     const city = typeof req.query.city === "string" ? req.query.city.trim() : "";
+    const locality = typeof req.query.locality === "string" ? req.query.locality.trim() : "";
     const pincode = typeof req.query.pincode === "string" ? req.query.pincode.trim() : "";
     const course = typeof req.query.course === "string" ? req.query.course.trim() : "";
     const tenantFilter = { tenantId: req.user!.tenantId };
@@ -137,13 +139,24 @@ router.get(
       });
     }
 
+    if (locality) {
+      andFilters.push({
+        OR: [
+          { locality: { contains: locality, mode: "insensitive" } },
+          { address: { contains: locality, mode: "insensitive" } }
+        ]
+      });
+    }
+
     if (searchQuery) {
       andFilters.push({
         OR: [
           { name: { contains: searchQuery, mode: "insensitive" } },
           { phone: { contains: searchQuery, mode: "insensitive" } },
           { email: { contains: searchQuery, mode: "insensitive" } },
-          { course: { contains: searchQuery, mode: "insensitive" } }
+          { course: { contains: searchQuery, mode: "insensitive" } },
+          { city: { contains: searchQuery, mode: "insensitive" } },
+          { locality: { contains: searchQuery, mode: "insensitive" } }
         ]
       });
     }
@@ -184,6 +197,7 @@ router.get(
           address: true,
           region: true,
           city: true,
+          locality: true,
           pincode: true,
           parentContact: true,
           course: true,
@@ -292,6 +306,27 @@ router.get(
 );
 
 router.get(
+  "/meta/localities",
+  asyncHandler(async (req, res) => {
+    const where: Prisma.LeadWhereInput =
+      req.user?.role === Role.TENANT_ADMIN || req.user?.role === Role.SUPER_ADMIN
+        ? { tenantId: req.user!.tenantId, locality: { not: null } }
+        : { tenantId: req.user!.tenantId, assignedTo: req.user!.id, locality: { not: null } };
+
+    const rows = await prisma.lead.findMany({
+      where,
+      select: { locality: true },
+      distinct: ["locality"],
+      orderBy: { locality: "asc" }
+    });
+
+    return res.json({
+      localities: rows.map((row) => row.locality).filter((value): value is string => Boolean(value))
+    });
+  })
+);
+
+router.get(
   "/:id",
   asyncHandler(async (req, res) => {
     const leadId = parseLeadId(req.params.id);
@@ -365,6 +400,7 @@ router.post(
         address: toNullable(payload.address),
         region: toNullable(payload.region),
         city: toNullable(payload.city),
+        locality: toNullable(payload.locality),
         pincode: toNullable(payload.pincode),
         parentContact: toNullable(payload.parentContact),
         course: toNullable(payload.course),
@@ -446,6 +482,7 @@ router.put(
         address: toNullable(payload.address),
         region: toNullable(payload.region),
         city: toNullable(payload.city),
+        locality: toNullable(payload.locality),
         pincode: toNullable(payload.pincode),
         parentContact: toNullable(payload.parentContact),
         course: toNullable(payload.course),

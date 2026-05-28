@@ -47,6 +47,7 @@ export default function LeadDetailPage() {
     pincode: "",
     region: "",
     city: "",
+    locality: "",
     parentContact: ""
   });
   const [activityForm, setActivityForm] = useState<{
@@ -98,6 +99,7 @@ export default function LeadDetailPage() {
         pincode: leadResponse.pincode ?? "",
         region: leadResponse.region ?? "",
         city: leadResponse.city ?? "",
+        locality: leadResponse.locality ?? "",
         parentContact: leadResponse.parentContact ?? ""
       });
       if (leadResponse.nextFollowUp) {
@@ -224,6 +226,7 @@ export default function LeadDetailPage() {
         pincode: leadForm.pincode.trim(),
         region: leadForm.region.trim(),
         city: leadForm.city.trim(),
+        locality: leadForm.locality.trim(),
         parentContact: leadForm.parentContact.trim(),
         status: lead.status,
         priority: lead.priority,
@@ -241,6 +244,7 @@ export default function LeadDetailPage() {
         pincode: updated.pincode ?? "",
         region: updated.region ?? "",
         city: updated.city ?? "",
+        locality: updated.locality ?? "",
         parentContact: updated.parentContact ?? ""
       });
       setError(null);
@@ -261,7 +265,8 @@ export default function LeadDetailPage() {
         ["Phone", lead.phone],
         ["Pincode", lead.pincode ?? ""],
         ["State", lead.region ?? ""],
-        ["City", lead.city ?? ""],
+        ["District", lead.city ?? ""],
+        ["City/Town/Village", lead.locality ?? ""],
         [],
         ["Activity Type", "Notes", "Created At", "Next Follow-up"]
       ];
@@ -481,11 +486,18 @@ export default function LeadDetailPage() {
                 className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
                 disabled={!leadForm.region}
               >
-                <option value="">{leadForm.region ? "Select city" : "Select state first"}</option>
+                <option value="">{leadForm.region ? "Select district" : "Select state first"}</option>
                 {cityOptions.map((city) => (
                   <option key={city} value={city}>{city}</option>
                 ))}
               </select>
+              <input
+                type="text"
+                value={leadForm.locality}
+                onChange={(e) => setLeadForm((current) => ({ ...current, locality: e.target.value }))}
+                placeholder="City/Town/Village"
+                className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+              />
               <input
                 type="text"
                 value={leadForm.parentContact}

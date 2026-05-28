@@ -25,10 +25,12 @@ export function LeadListContent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [cityFilter, setCityFilter] = useState("");
+  const [localityFilter, setLocalityFilter] = useState("");
   const [pincodeFilter, setPincodeFilter] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
   const [draftStateFilter, setDraftStateFilter] = useState("");
   const [draftCityFilter, setDraftCityFilter] = useState("");
+  const [draftLocalityFilter, setDraftLocalityFilter] = useState("");
   const [draftPincodeFilter, setDraftPincodeFilter] = useState("");
   const [draftCourseFilter, setDraftCourseFilter] = useState("");
   const [showFilterPopup, setShowFilterPopup] = useState(false);
@@ -40,6 +42,7 @@ export function LeadListContent() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [tenantCourseOptions, setTenantCourseOptions] = useState<string[]>([]);
   const [tenantPincodes, setTenantPincodes] = useState<string[]>([]);
+  const [tenantLocalities, setTenantLocalities] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
@@ -63,12 +66,20 @@ export function LeadListContent() {
       .catch(() => setTenantPincodes([]));
   }, []);
 
+  useEffect(() => {
+    void api
+      .getLeadLocalities()
+      .then((response) => setTenantLocalities(response.localities))
+      .catch(() => setTenantLocalities([]));
+  }, []);
+
   const loadLeads = async () => {
     setLoading(true);
     try {
       const response = await api.getLeadsPage({
         state: stateFilter || undefined,
         city: cityFilter || undefined,
+        locality: localityFilter || undefined,
         pincode: pincodeFilter || undefined,
         course: courseFilter || undefined,
         status: activeTab === "ALL" ? undefined : activeTab,
@@ -96,11 +107,12 @@ export function LeadListContent() {
 
   useEffect(() => {
     void loadLeads();
-  }, [stateFilter, cityFilter, pincodeFilter, courseFilter, activeTab, searchTerm, page, pageSize]);
+  }, [stateFilter, cityFilter, localityFilter, pincodeFilter, courseFilter, activeTab, searchTerm, page, pageSize]);
 
   const openFilterPopup = () => {
     setDraftStateFilter(stateFilter);
     setDraftCityFilter(cityFilter);
+    setDraftLocalityFilter(localityFilter);
     setDraftPincodeFilter(pincodeFilter);
     setDraftCourseFilter(courseFilter);
     setShowFilterPopup(true);
@@ -109,6 +121,7 @@ export function LeadListContent() {
   const applyFilters = () => {
     setStateFilter(draftStateFilter.trim());
     setCityFilter(normalizeCityValue(draftCityFilter));
+    setLocalityFilter(draftLocalityFilter.trim());
     setPincodeFilter(draftPincodeFilter.trim());
     setCourseFilter(draftCourseFilter.trim());
     setPage(1);
@@ -118,10 +131,12 @@ export function LeadListContent() {
   const clearFilters = () => {
     setDraftStateFilter("");
     setDraftCityFilter("");
+    setDraftLocalityFilter("");
     setDraftPincodeFilter("");
     setDraftCourseFilter("");
     setStateFilter("");
     setCityFilter("");
+    setLocalityFilter("");
     setPincodeFilter("");
     setCourseFilter("");
     setPage(1);
@@ -216,11 +231,12 @@ export function LeadListContent() {
               }}
               className="w-full px-4 py-2 rounded-lg border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            {(stateFilter || cityFilter || pincodeFilter || courseFilter) && (
+            {(stateFilter || cityFilter || localityFilter || pincodeFilter || courseFilter) && (
               <div className="mt-3 text-xs text-slate-600">
                 Active filters:
                 {stateFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">State: {stateFilter}</span>}
-                {cityFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">City: {cityFilter}</span>}
+                {cityFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">District: {cityFilter}</span>}
+                {localityFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">City/Town/Village: {localityFilter}</span>}
                 {pincodeFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">Pincode: {pincodeFilter}</span>}
                 {courseFilter && <span className="ml-2 rounded bg-blue-100 px-2 py-1 text-blue-700">Course: {courseFilter}</span>}
               </div>
@@ -231,7 +247,7 @@ export function LeadListContent() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
               <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
                 <h3 className="text-lg font-bold text-slate-900">Apply Filters</h3>
-                <p className="mt-1 text-sm text-slate-600">Filter leads by State, City, Pincode, and Course.</p>
+                <p className="mt-1 text-sm text-slate-600">Filter leads by State, District, City/Town/Village, Pincode, and Course.</p>
                 <div className="mt-4 space-y-3">
                   <select
                     value={draftStateFilter}
@@ -257,10 +273,22 @@ export function LeadListContent() {
                     disabled={!draftStateFilter}
                     className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm disabled:opacity-60"
                   >
-                    <option value="">{draftStateFilter ? "All cities" : "Select state first"}</option>
+                    <option value="">{draftStateFilter ? "All districts" : "Select state first"}</option>
                     {draftCityOptions.map((city) => (
                       <option key={city} value={city}>
                         {city}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={draftLocalityFilter}
+                    onChange={(e) => setDraftLocalityFilter(e.target.value)}
+                    className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm"
+                  >
+                    <option value="">All city/town/village</option>
+                    {tenantLocalities.map((locality) => (
+                      <option key={locality} value={locality}>
+                        {locality}
                       </option>
                     ))}
                   </select>

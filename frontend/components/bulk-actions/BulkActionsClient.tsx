@@ -34,6 +34,7 @@ type ImportPreviewRow = {
     email: string | null;
     address: string | null;
     pincode: string | null;
+    locality: string | null;
     parentContact: string | null;
     course: string | null;
     source: string | null;
@@ -72,6 +73,7 @@ const OPTIONAL_CSV_COLUMNS = [
   'location',
   'state',
   'city',
+  'locality',
   'pincode',
   'address',
   'parent_contact',
@@ -108,6 +110,9 @@ const EXPORT_COLUMNS = [
   { value: 'phone', label: 'Phone' },
   { value: 'email', label: 'Email' },
   { value: 'address', label: 'Address' },
+  { value: 'state', label: 'State' },
+  { value: 'city', label: 'District' },
+  { value: 'locality', label: 'City/Town/Village' },
   { value: 'pincode', label: 'Pincode' },
   { value: 'parent_contact', label: 'Parent contact' },
   { value: 'course', label: 'Course' },

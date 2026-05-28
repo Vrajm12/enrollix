@@ -121,10 +121,11 @@ export const api = {
     }>("/dashboard/summary"),
 
   // Leads
-  getLeads: (filters?: { state?: string; city?: string; pincode?: string; course?: string }) => {
+  getLeads: (filters?: { state?: string; city?: string; locality?: string; pincode?: string; course?: string }) => {
     const params = new URLSearchParams();
     if (filters?.state) params.append("state", filters.state);
     if (filters?.city) params.append("city", filters.city);
+    if (filters?.locality) params.append("locality", filters.locality);
     if (filters?.pincode) params.append("pincode", filters.pincode);
     if (filters?.course) params.append("course", filters.course);
     const query = params.toString();
@@ -133,6 +134,7 @@ export const api = {
   getLeadsPage: (filters?: {
     state?: string;
     city?: string;
+    locality?: string;
     pincode?: string;
     course?: string;
     status?: LeadStatus;
@@ -143,6 +145,7 @@ export const api = {
     const params = new URLSearchParams();
     if (filters?.state) params.append("state", filters.state);
     if (filters?.city) params.append("city", filters.city);
+    if (filters?.locality) params.append("locality", filters.locality);
     if (filters?.pincode) params.append("pincode", filters.pincode);
     if (filters?.course) params.append("course", filters.course);
     if (filters?.status) params.append("status", filters.status);
@@ -162,6 +165,7 @@ export const api = {
   },
   getLead: (id: number) => request<Lead>(`/leads/${id}`),
   getLeadPincodes: () => request<{ pincodes: string[] }>("/leads/meta/pincodes"),
+  getLeadLocalities: () => request<{ localities: string[] }>("/leads/meta/localities"),
   createLead: (payload: Partial<Lead>) =>
     request<Lead>("/leads", {
       method: "POST",
@@ -226,6 +230,7 @@ export const api = {
           email: string | null;
           address: string | null;
           pincode: string | null;
+          locality: string | null;
           parentContact: string | null;
           course: string | null;
           source: string | null;
@@ -262,6 +267,7 @@ export const api = {
           email: string | null;
           address: string | null;
           pincode: string | null;
+          locality: string | null;
           parentContact: string | null;
           course: string | null;
           source: string | null;
@@ -346,6 +352,7 @@ export const api = {
     email: string | null;
     address: string | null;
     pincode: string | null;
+    locality: string | null;
     parentContact: string | null;
     course: string | null;
     source: string | null;
@@ -524,44 +531,49 @@ export const api = {
   getMessagingStats: () => request("/messaging/stats"),
 
   // Reporting
-  getFunnelReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
+  getFunnelReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
+    if (locality) params.append("locality", locality);
     return request(`/reports/funnel?${params.toString()}`);
   },
-  getRevenueReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
+  getRevenueReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
+    if (locality) params.append("locality", locality);
     return request(`/reports/revenue?${params.toString()}`);
   },
-  getTeamPerformanceReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
+  getTeamPerformanceReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
+    if (locality) params.append("locality", locality);
     return request(`/reports/team-performance?${params.toString()}`);
   },
-  getLeadSourcesReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
+  getLeadSourcesReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
+    if (locality) params.append("locality", locality);
     return request(`/reports/lead-sources?${params.toString()}`);
   },
-  getPriorityDistributionReport: (startDate?: string, endDate?: string, state?: string, city?: string) => {
+  getPriorityDistributionReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
+    if (locality) params.append("locality", locality);
     return request(`/reports/priority-distribution?${params.toString()}`);
   },
   saveReport: (reportType: string, data: unknown, filters?: unknown) =>

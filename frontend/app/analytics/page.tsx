@@ -55,7 +55,8 @@ export default function AnalyticsPage() {
     end: new Date().toISOString().split('T')[0],
   });
   const [stateFilter, setStateFilter] = useState('');
-  const [cityFilter, setCityFilter] = useState('');
+  const [districtFilter, setDistrictFilter] = useState('');
+  const [localityFilter, setLocalityFilter] = useState('');
 
   const [funnelData, setFunnelData] = useState<FunnelRow[]>([]);
   const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
@@ -68,7 +69,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     void loadReports();
-  }, [activeReport, dateRange, stateFilter, cityFilter]);
+  }, [activeReport, dateRange, stateFilter, districtFilter, localityFilter]);
 
   const loadReports = async () => {
     setLoading(true);
@@ -78,23 +79,23 @@ export default function AnalyticsPage() {
       const endDate = `${dateRange.end}T23:59:59.999Z`;
 
       if (activeReport === 'funnel') {
-        const resp = await api.getFunnelReport(startDate, endDate, stateFilter || undefined, cityFilter || undefined) as { data?: FunnelRow[] };
+        const resp = await api.getFunnelReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: FunnelRow[] };
         setFunnelData(resp.data || []);
       }
       if (activeReport === 'revenue') {
-        const resp = await api.getRevenueReport(startDate, endDate, stateFilter || undefined, cityFilter || undefined) as { data?: RevenueData };
+        const resp = await api.getRevenueReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: RevenueData };
         setRevenueData(resp.data || null);
       }
       if (activeReport === 'team') {
-        const resp = await api.getTeamPerformanceReport(startDate, endDate, stateFilter || undefined, cityFilter || undefined) as { data?: TeamRow[] };
+        const resp = await api.getTeamPerformanceReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: TeamRow[] };
         setTeamData(resp.data || []);
       }
       if (activeReport === 'sources') {
-        const resp = await api.getLeadSourcesReport(startDate, endDate, stateFilter || undefined, cityFilter || undefined) as { data?: SourceRow[] };
+        const resp = await api.getLeadSourcesReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: SourceRow[] };
         setSourceData(resp.data || []);
       }
       if (activeReport === 'priority') {
-        const resp = await api.getPriorityDistributionReport(startDate, endDate, stateFilter || undefined, cityFilter || undefined) as { data?: PriorityRow[] };
+        const resp = await api.getPriorityDistributionReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: PriorityRow[] };
         setPriorityData(resp.data || []);
       }
     } catch (err) {
@@ -141,7 +142,8 @@ export default function AnalyticsPage() {
         ['User Email', user?.email ?? 'N/A'],
         ['Date Range', `${dateRange.start} to ${dateRange.end}`],
         ['State Filter', stateFilter || 'All'],
-        ['City Filter', cityFilter || 'All'],
+        ['District Filter', districtFilter || 'All'],
+        ['City/Town/Village Filter', localityFilter || 'All'],
         ['Generated At', generatedAt.toLocaleString('en-IN')],
         [],
       ];
@@ -217,7 +219,8 @@ export default function AnalyticsPage() {
       await api.saveReport(activeReport.toUpperCase(), data, {
         ...dateRange,
         state: stateFilter || null,
-        city: cityFilter || null
+        city: districtFilter || null,
+        locality: localityFilter || null
       }).catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to export report');
@@ -258,8 +261,12 @@ export default function AnalyticsPage() {
               <input type="text" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} placeholder="e.g. Maharashtra" className="rounded-lg border border-blue-200 px-4 py-2" />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-900">City</label>
-              <input type="text" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} placeholder="e.g. Pune" className="rounded-lg border border-blue-200 px-4 py-2" />
+              <label className="mb-2 block text-sm font-semibold text-slate-900">District</label>
+              <input type="text" value={districtFilter} onChange={(e) => setDistrictFilter(e.target.value)} placeholder="e.g. Pune" className="rounded-lg border border-blue-200 px-4 py-2" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-900">City/Town/Village</label>
+              <input type="text" value={localityFilter} onChange={(e) => setLocalityFilter(e.target.value)} placeholder="e.g. Pimpri" className="rounded-lg border border-blue-200 px-4 py-2" />
             </div>
             <button onClick={handleExport} disabled={exporting} className="ml-auto inline-flex items-center gap-2 rounded-lg border border-blue-200 px-6 py-2 font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60">
               <Download size={18} /> {exporting ? 'Preparing Excel...' : 'Export Report'}

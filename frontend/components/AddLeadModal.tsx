@@ -38,6 +38,7 @@ export function AddLeadModal({
     pincode: string;
     region: string;
     city: string;
+    locality: string;
     parentName: string;
     parentPhone: string;
   }>({
@@ -49,6 +50,7 @@ export function AddLeadModal({
     pincode: '',
     region: '',
     city: '',
+    locality: '',
     parentName: '',
     parentPhone: '',
   });
@@ -65,6 +67,7 @@ export function AddLeadModal({
       pincode: '',
       region: '',
       city: '',
+      locality: '',
       parentName: '',
       parentPhone: '',
     });
@@ -220,20 +223,31 @@ export function AddLeadModal({
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-700 mb-1 block">City</label>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">District</label>
                 <select
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   disabled={isLoading || !formData.region}
                   className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <option value="">{formData.region ? 'Select city' : 'Select state first'}</option>
+                  <option value="">{formData.region ? 'Select district' : 'Select state first'}</option>
                   {cityOptions.map((city) => (
                     <option key={city} value={city}>
                       {city}
                     </option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-700 mb-1 block">City/Town/Village</label>
+                <Input
+                  type="text"
+                  placeholder="Enter city/town/village"
+                  value={formData.locality}
+                  onChange={(e) => setFormData({ ...formData, locality: e.target.value })}
+                  className="rounded-lg border-slate-200"
+                  disabled={isLoading}
+                />
               </div>
             </div>
           </div>
