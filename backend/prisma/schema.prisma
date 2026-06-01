@@ -64,6 +64,7 @@ model Tenant {
   whatsappMessages WhatsAppMessage[]
   smsMessages   SMSMessage[]
   reports       Report[]
+  integrationApiKeys IntegrationApiKey[]
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -106,6 +107,8 @@ model Lead {
   parentContact    String?     @map("parent_contact")
   course           String?
   source           String?
+  campaign         String?
+  partnerSource    String?     @map("partner_source")
   status           LeadStatus  @default(LEAD)
   priority         Priority    @default(COLD)
   nextFollowUp     DateTime?   @map("next_follow_up")
@@ -128,6 +131,25 @@ model Lead {
   @@index([tenantId, pincode])
   @@index([assignedTo])
   @@map("leads")
+}
+
+model IntegrationApiKey {
+  id               Int      @id @default(autoincrement())
+  tenantId         Int      @map("tenant_id")
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  partner          String
+  name             String?
+  apiKeyHash       String   @map("api_key_hash")
+  apiKeyPrefix     String   @map("api_key_prefix")
+  isActive         Boolean  @default(true) @map("is_active")
+  rateLimitPerMin  Int      @default(60) @map("rate_limit_per_min")
+  lastUsedAt       DateTime? @map("last_used_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([partner, apiKeyHash])
+  @@index([tenantId, partner, isActive])
+  @@map("integration_api_keys")
 }
 
 model Activity {

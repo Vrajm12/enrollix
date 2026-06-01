@@ -17,6 +17,7 @@
     "reset:user-password": "tsx scripts/reset-user-password.ts",
     "backfill:lead-location": "tsx scripts/backfill-lead-location.ts",
     "reconcile:leads-csv": "tsx scripts/reconcile-leads-from-csv.ts",
+    "integration:key:create": "tsx scripts/create-integration-api-key.ts",
     "seed:engineering": "tsx scripts/seed-engineering-leads.ts --count 500",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",

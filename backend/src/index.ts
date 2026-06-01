@@ -16,6 +16,7 @@ import dashboardRouter from "./routes/dashboard.js";
 import leadsRouter from "./routes/leads.js";
 import metaWebhookRouter from "./routes/metaWebhook.js";
 import messagingRouter from "./routes/messaging.js";
+import partnerIntegrationsRouter from "./routes/partnerIntegrations.js";
 import reportingRouter from "./routes/reporting.js";
 import usersRouter from "./routes/users.js";
 
@@ -133,7 +134,7 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Slug'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-Slug', 'X-API-Key'],
     maxAge: 3600
   })
 );
@@ -184,6 +185,7 @@ app.get("/api/info", (_req, res) => {
 });
 
 app.use("/integrations/meta", metaWebhookRouter);
+app.use("/integrations", partnerIntegrationsRouter);
 
 app.use("/auth", authLimiter, authRouter);
 app.use("/admin", apiLimiter, adminRouter);
