@@ -15,10 +15,16 @@ https://api.guruverse.co.in
 **Method:** POST
 
 ```http
-POST /integrations/collegedunia/leads
+POST /integrations/partner/collegedunia/leads
 ```
 
 **Content-Type:** `application/json`
+
+Backward-compatible alias:
+
+```http
+POST /integrations/collegedunia/leads
+```
 
 ---
 
@@ -42,7 +48,7 @@ Authorization: Bearer YOUR_COLLEGEDUNIA_API_KEY
 ## Sample Request
 
 ```bash
-curl -X POST "https://api.guruverse.co.in/integrations/collegedunia/leads" \
+curl -X POST "https://api.guruverse.co.in/integrations/partner/collegedunia/leads" \
 -H "Content-Type: application/json" \
 -H "X-Tenant-Slug: dvcoe" \
 -H "X-API-Key: YOUR_COLLEGEDUNIA_API_KEY" \
@@ -238,6 +244,12 @@ If duplicate lead exists:
 # Health Check Endpoint
 
 For connectivity testing:
+
+```http
+GET /integrations/partner/collegedunia/health
+```
+
+Backward-compatible alias:
 
 ```http
 GET /integrations/collegedunia/health

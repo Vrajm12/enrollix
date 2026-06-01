@@ -1,7 +1,7 @@
 import { LeadStatus, Prisma, Priority } from "@prisma/client";
 import { createHash } from "crypto";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { Request, Router } from "express";
+import { Request, Response, Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
@@ -11,9 +11,10 @@ type DuplicateBy = "phone" | "email";
 
 interface PartnerLeadIntegrationConfig {
   partnerCode: string;
-  routePath: string;
   leadSource: string;
   rateLimitPerMin: number;
+  aliasLeadPaths?: string[];
+  aliasHealthPaths?: string[];
 }
 
 interface IntegrationAuthContext {
@@ -501,19 +502,42 @@ const createPartnerLeadIngestionHandler = (config: PartnerLeadIntegrationConfig)
     });
   });
 
+const createPartnerHealthHandler = () =>
+  (_req: Request, res: Response) => {
+    return res.json({
+      success: true,
+      status: "OK"
+    });
+  };
+
 const partnerConfigs: PartnerLeadIntegrationConfig[] = [
   {
     partnerCode: "collegedunia",
-    routePath: "/collegedunia/leads",
     leadSource: "Collegedunia",
-    rateLimitPerMin: 60
+    rateLimitPerMin: 60,
+    aliasLeadPaths: ["/collegedunia/leads"],
+    aliasHealthPaths: ["/collegedunia/health"]
   }
 ];
 
 const router = Router();
 
 for (const config of partnerConfigs) {
-  router.post(config.routePath, createPartnerRateLimiter(config), createPartnerLeadIngestionHandler(config));
+  const leadIngestionHandler = createPartnerLeadIngestionHandler(config);
+  const leadRateLimiter = createPartnerRateLimiter(config);
+  const canonicalLeadPath = `/partner/${config.partnerCode}/leads`;
+  const canonicalHealthPath = `/partner/${config.partnerCode}/health`;
+
+  router.get(canonicalHealthPath, createPartnerHealthHandler());
+  router.post(canonicalLeadPath, leadRateLimiter, leadIngestionHandler);
+
+  for (const aliasHealthPath of config.aliasHealthPaths ?? []) {
+    router.get(aliasHealthPath, createPartnerHealthHandler());
+  }
+
+  for (const aliasLeadPath of config.aliasLeadPaths ?? []) {
+    router.post(aliasLeadPath, leadRateLimiter, leadIngestionHandler);
+  }
 }
 
 export default router;
