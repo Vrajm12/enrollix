@@ -6,6 +6,9 @@
 https://api.guruverse.co.in
 ```
 
+Integration Version: v1.0
+Last Updated: 01 June 2026
+
 ---
 
 # Lead Creation Endpoint
@@ -42,6 +45,8 @@ Alternative:
 ```http
 Authorization: Bearer YOUR_COLLEGEDUNIA_API_KEY
 ```
+
+API Key will be shared separately through a secure communication channel.
 
 ---
 
@@ -146,7 +151,7 @@ Guruverse CRM checks duplicates in the following order:
 1. Phone Number
 2. Email Address
 
-If duplicate lead exists:
+If a duplicate lead exists:
 
 * Existing lead remains unchanged
 * Existing Lead ID is returned
@@ -276,7 +281,7 @@ Per API Key
 Per Tenant
 ```
 
-Can be adjusted on request.
+Can be adjusted upon request.
 
 ---
 
@@ -317,21 +322,13 @@ Additional IP whitelisting can be enabled upon request.
 
 ---
 
-# Future Partner Compatibility
-
-The integration framework is designed to support all the program partners,
-
-without requiring separate integration architecture.
-
----
-
 # Support
 
 For technical support or integration assistance:
 
 ```text
-Guruverse CRM
-API Team
-Email:gurubrandingservices@gmail.com
+Guruverse CRM API Team
+
+Email: gurubrandingservices@gmail.com
 Website: https://guruverse.co.in
 ```

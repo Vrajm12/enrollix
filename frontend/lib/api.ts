@@ -121,13 +121,14 @@ export const api = {
     }>("/dashboard/summary"),
 
   // Leads
-  getLeads: (filters?: { state?: string; city?: string; locality?: string; pincode?: string; course?: string }) => {
+  getLeads: (filters?: { state?: string; city?: string; locality?: string; pincode?: string; course?: string; source?: string }) => {
     const params = new URLSearchParams();
     if (filters?.state) params.append("state", filters.state);
     if (filters?.city) params.append("city", filters.city);
     if (filters?.locality) params.append("locality", filters.locality);
     if (filters?.pincode) params.append("pincode", filters.pincode);
     if (filters?.course) params.append("course", filters.course);
+    if (filters?.source) params.append("source", filters.source);
     const query = params.toString();
     return request<Lead[]>(`/leads${query ? `?${query}` : ""}`);
   },
@@ -137,6 +138,7 @@ export const api = {
     locality?: string;
     pincode?: string;
     course?: string;
+    source?: string;
     status?: LeadStatus;
     search?: string;
     page?: number;
@@ -148,6 +150,7 @@ export const api = {
     if (filters?.locality) params.append("locality", filters.locality);
     if (filters?.pincode) params.append("pincode", filters.pincode);
     if (filters?.course) params.append("course", filters.course);
+    if (filters?.source) params.append("source", filters.source);
     if (filters?.status) params.append("status", filters.status);
     if (filters?.search) params.append("search", filters.search);
     if (filters?.page) params.append("page", String(filters.page));
@@ -546,49 +549,54 @@ export const api = {
   getMessagingStats: () => request("/messaging/stats"),
 
   // Reporting
-  getFunnelReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
+  getFunnelReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string, source?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
     if (locality) params.append("locality", locality);
+    if (source) params.append("source", source);
     return request(`/reports/funnel?${params.toString()}`);
   },
-  getRevenueReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
+  getRevenueReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string, source?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
     if (locality) params.append("locality", locality);
+    if (source) params.append("source", source);
     return request(`/reports/revenue?${params.toString()}`);
   },
-  getTeamPerformanceReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
+  getTeamPerformanceReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string, source?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
     if (locality) params.append("locality", locality);
+    if (source) params.append("source", source);
     return request(`/reports/team-performance?${params.toString()}`);
   },
-  getLeadSourcesReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
+  getLeadSourcesReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string, source?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
     if (locality) params.append("locality", locality);
+    if (source) params.append("source", source);
     return request(`/reports/lead-sources?${params.toString()}`);
   },
-  getPriorityDistributionReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string) => {
+  getPriorityDistributionReport: (startDate?: string, endDate?: string, state?: string, city?: string, locality?: string, source?: string) => {
     const params = new URLSearchParams();
     if (startDate) params.append("startDate", startDate);
     if (endDate) params.append("endDate", endDate);
     if (state) params.append("state", state);
     if (city) params.append("city", city);
     if (locality) params.append("locality", locality);
+    if (source) params.append("source", source);
     return request(`/reports/priority-distribution?${params.toString()}`);
   },
   saveReport: (reportType: string, data: unknown, filters?: unknown) =>

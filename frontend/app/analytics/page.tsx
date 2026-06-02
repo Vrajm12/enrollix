@@ -5,6 +5,7 @@ import { BarChart3, Calendar, Download, Loader2, PieChart as PieChartIcon, Trend
 import { api } from '@/lib/api';
 import Sidebar from '@/components/Sidebar';
 import { getUser } from '@/lib/auth';
+import { SOURCES } from '@/lib/constants';
 
 type ReportKey = 'funnel' | 'revenue' | 'team' | 'sources' | 'priority';
 
@@ -57,6 +58,7 @@ export default function AnalyticsPage() {
   const [stateFilter, setStateFilter] = useState('');
   const [districtFilter, setDistrictFilter] = useState('');
   const [localityFilter, setLocalityFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
 
   const [funnelData, setFunnelData] = useState<FunnelRow[]>([]);
   const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
@@ -69,7 +71,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     void loadReports();
-  }, [activeReport, dateRange, stateFilter, districtFilter, localityFilter]);
+  }, [activeReport, dateRange, stateFilter, districtFilter, localityFilter, sourceFilter]);
 
   const loadReports = async () => {
     setLoading(true);
@@ -79,23 +81,58 @@ export default function AnalyticsPage() {
       const endDate = `${dateRange.end}T23:59:59.999Z`;
 
       if (activeReport === 'funnel') {
-        const resp = await api.getFunnelReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: FunnelRow[] };
+        const resp = await api.getFunnelReport(
+          startDate,
+          endDate,
+          stateFilter || undefined,
+          districtFilter || undefined,
+          localityFilter || undefined,
+          sourceFilter || undefined
+        ) as { data?: FunnelRow[] };
         setFunnelData(resp.data || []);
       }
       if (activeReport === 'revenue') {
-        const resp = await api.getRevenueReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: RevenueData };
+        const resp = await api.getRevenueReport(
+          startDate,
+          endDate,
+          stateFilter || undefined,
+          districtFilter || undefined,
+          localityFilter || undefined,
+          sourceFilter || undefined
+        ) as { data?: RevenueData };
         setRevenueData(resp.data || null);
       }
       if (activeReport === 'team') {
-        const resp = await api.getTeamPerformanceReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: TeamRow[] };
+        const resp = await api.getTeamPerformanceReport(
+          startDate,
+          endDate,
+          stateFilter || undefined,
+          districtFilter || undefined,
+          localityFilter || undefined,
+          sourceFilter || undefined
+        ) as { data?: TeamRow[] };
         setTeamData(resp.data || []);
       }
       if (activeReport === 'sources') {
-        const resp = await api.getLeadSourcesReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: SourceRow[] };
+        const resp = await api.getLeadSourcesReport(
+          startDate,
+          endDate,
+          stateFilter || undefined,
+          districtFilter || undefined,
+          localityFilter || undefined,
+          sourceFilter || undefined
+        ) as { data?: SourceRow[] };
         setSourceData(resp.data || []);
       }
       if (activeReport === 'priority') {
-        const resp = await api.getPriorityDistributionReport(startDate, endDate, stateFilter || undefined, districtFilter || undefined, localityFilter || undefined) as { data?: PriorityRow[] };
+        const resp = await api.getPriorityDistributionReport(
+          startDate,
+          endDate,
+          stateFilter || undefined,
+          districtFilter || undefined,
+          localityFilter || undefined,
+          sourceFilter || undefined
+        ) as { data?: PriorityRow[] };
         setPriorityData(resp.data || []);
       }
     } catch (err) {
@@ -144,6 +181,7 @@ export default function AnalyticsPage() {
         ['State Filter', stateFilter || 'All'],
         ['District Filter', districtFilter || 'All'],
         ['City/Town/Village Filter', localityFilter || 'All'],
+        ['Source Filter', sourceFilter || 'All'],
         ['Generated At', generatedAt.toLocaleString('en-IN')],
         [],
       ];
@@ -220,7 +258,8 @@ export default function AnalyticsPage() {
         ...dateRange,
         state: stateFilter || null,
         city: districtFilter || null,
-        locality: localityFilter || null
+        locality: localityFilter || null,
+        source: sourceFilter || null
       }).catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to export report');
@@ -267,6 +306,17 @@ export default function AnalyticsPage() {
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-900">City/Town/Village</label>
               <input type="text" value={localityFilter} onChange={(e) => setLocalityFilter(e.target.value)} placeholder="e.g. Pimpri" className="rounded-lg border border-blue-200 px-4 py-2" />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-900">Source</label>
+              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="rounded-lg border border-blue-200 px-4 py-2">
+                <option value="">All sources</option>
+                {SOURCES.map((source) => (
+                  <option key={source} value={source}>
+                    {source}
+                  </option>
+                ))}
+              </select>
             </div>
             <button onClick={handleExport} disabled={exporting} className="ml-auto inline-flex items-center gap-2 rounded-lg border border-blue-200 px-6 py-2 font-medium text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60">
               <Download size={18} /> {exporting ? 'Preparing Excel...' : 'Export Report'}

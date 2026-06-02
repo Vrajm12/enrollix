@@ -197,6 +197,7 @@ export default function AdminPage() {
   const [requestLogsUnavailable, setRequestLogsUnavailable] = useState(false);
 
   const [tenantEditName, setTenantEditName] = useState<Record<number, string>>({});
+  const [tenantEditMaxUsers, setTenantEditMaxUsers] = useState<Record<number, number>>({});
   const [userEditName, setUserEditName] = useState<Record<number, string>>({});
   const [editingTenantId, setEditingTenantId] = useState<number | null>(null);
   const [editingUserId, setEditingUserId] = useState<number | null>(null);
@@ -319,19 +320,31 @@ export default function AdminPage() {
     }
   };
 
-  const handleTenantRename = async (tenant: Tenant) => {
+  const handleTenantUpdate = async (tenant: Tenant) => {
     const name = (tenantEditName[tenant.id] ?? '').trim();
-    if (!name || name === tenant.name) return;
+    const maxUsers = tenantEditMaxUsers[tenant.id] ?? tenant.maxUsers;
+    if (!name) return false;
+    if (!Number.isFinite(maxUsers) || maxUsers < 1) {
+      setError('User limit must be at least 1.');
+      return false;
+    }
+    if (name === tenant.name && maxUsers === tenant.maxUsers) return true;
     try {
-      const updated = await updateTenant(tenant.id, { name });
-      setTenants((prev) => prev.map((t) => (t.id === tenant.id ? { ...t, name: updated.name } : t)));
+      const updated = await updateTenant(tenant.id, { name, maxUsers });
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === tenant.id ? { ...t, name: updated.name, maxUsers: updated.maxUsers } : t
+        )
+      );
       if (selectedTenant?.id === tenant.id) {
-        setSelectedTenant({ ...selectedTenant, name: updated.name });
+      setSelectedTenant({ ...selectedTenant, name: updated.name, maxUsers: updated.maxUsers });
       }
-      setSuccessMessage('Tenant name updated.');
+      setSuccessMessage('Tenant details updated.');
       setError('');
+      return true;
     } catch (err: any) {
-      setError(err.message || 'Failed to rename tenant');
+      setError(err.message || 'Failed to update tenant');
+      return false;
     }
   };
 
@@ -610,7 +623,10 @@ export default function AdminPage() {
                     ))}
                   </div>
                 </div>
-                <input type="number" min="1" value={newTenant.maxUsers} onChange={(e) => setNewTenant({ ...newTenant, maxUsers: parseInt(e.target.value, 10) || 1 })} className="w-full px-3 py-2 border rounded-md text-gray-900" />
+                <label className="block text-sm font-medium text-gray-700">
+                  User limit
+                  <input type="number" min="1" value={newTenant.maxUsers} onChange={(e) => setNewTenant({ ...newTenant, maxUsers: parseInt(e.target.value, 10) || 1 })} className="mt-1 w-full px-3 py-2 border rounded-md text-gray-900" />
+                </label>
                 <button type="submit" disabled={creating} className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium">{creating ? 'Creating...' : 'Create Tenant'}</button>
               </form>
             </div>
@@ -622,23 +638,72 @@ export default function AdminPage() {
                 <div key={tenant.id} className={`bg-white rounded-lg shadow p-6 ${selectedTenant?.id === tenant.id ? 'ring-2 ring-blue-600' : ''}`}>
                   <div className="flex flex-wrap gap-2 justify-between">
                     <div className="space-y-2 flex-1 min-w-[220px]">
-                      <input
-                        value={tenantEditName[tenant.id] ?? tenant.name}
-                        onChange={(e) => setTenantEditName((prev) => ({ ...prev, [tenant.id]: e.target.value }))}
-                        readOnly={editingTenantId !== tenant.id}
-                        className={`w-full border rounded px-2 py-2 text-sm ${editingTenantId === tenant.id ? 'bg-white' : 'bg-gray-100 cursor-not-allowed'}`}
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-[1fr_120px] gap-2">
+                        <label className="block text-xs font-medium text-gray-600">
+                          Tenant name
+                          <input
+                            value={tenantEditName[tenant.id] ?? tenant.name}
+                            onChange={(e) => setTenantEditName((prev) => ({ ...prev, [tenant.id]: e.target.value }))}
+                            readOnly={editingTenantId !== tenant.id}
+                            className={`mt-1 w-full border rounded px-2 py-2 text-sm ${editingTenantId === tenant.id ? 'bg-white' : 'bg-gray-100 cursor-not-allowed'}`}
+                          />
+                        </label>
+                        <label className="block text-xs font-medium text-gray-600">
+                          User limit
+                          <input
+                            type="number"
+                            min="1"
+                            value={tenantEditMaxUsers[tenant.id] ?? tenant.maxUsers}
+                            onChange={(e) =>
+                              setTenantEditMaxUsers((prev) => ({
+                                ...prev,
+                                [tenant.id]: parseInt(e.target.value, 10) || 1
+                              }))
+                            }
+                            readOnly={editingTenantId !== tenant.id}
+                            className={`mt-1 w-full border rounded px-2 py-2 text-sm ${editingTenantId === tenant.id ? 'bg-white' : 'bg-gray-100 cursor-not-allowed'}`}
+                          />
+                        </label>
+                      </div>
                       <p className="text-sm text-gray-600">Slug: <code className="bg-gray-100 px-2 py-1 rounded">{tenant.slug}</code></p>
                     </div>
                     <div className="flex items-start gap-2">
                       <button type="button" onClick={() => void loadTenantUsers(tenant)} className="px-3 py-2 bg-gray-100 text-sm rounded">Profiles</button>
                       {editingTenantId === tenant.id ? (
                         <>
-                          <button type="button" onClick={() => void handleTenantRename(tenant).then(() => setEditingTenantId(null))} className="px-3 py-2 bg-blue-600 text-white text-sm rounded">Save</button>
-                          <button type="button" onClick={() => { setTenantEditName((prev) => ({ ...prev, [tenant.id]: tenant.name })); setEditingTenantId(null); }} className="px-3 py-2 bg-gray-500 text-white text-sm rounded">Cancel</button>
+                          <button
+                            type="button"
+                            onClick={() => void handleTenantUpdate(tenant).then((saved) => {
+                              if (saved) setEditingTenantId(null);
+                            })}
+                            className="px-3 py-2 bg-blue-600 text-white text-sm rounded"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTenantEditName((prev) => ({ ...prev, [tenant.id]: tenant.name }));
+                              setTenantEditMaxUsers((prev) => ({ ...prev, [tenant.id]: tenant.maxUsers }));
+                              setEditingTenantId(null);
+                            }}
+                            className="px-3 py-2 bg-gray-500 text-white text-sm rounded"
+                          >
+                            Cancel
+                          </button>
                         </>
                       ) : (
-                        <button type="button" onClick={() => setEditingTenantId(tenant.id)} className="px-3 py-2 bg-blue-600 text-white text-sm rounded inline-flex items-center gap-1"><Pencil size={14} /> Edit</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTenantEditName((prev) => ({ ...prev, [tenant.id]: tenant.name }));
+                            setTenantEditMaxUsers((prev) => ({ ...prev, [tenant.id]: tenant.maxUsers }));
+                            setEditingTenantId(tenant.id);
+                          }}
+                          className="px-3 py-2 bg-blue-600 text-white text-sm rounded inline-flex items-center gap-1"
+                        >
+                          <Pencil size={14} /> Edit
+                        </button>
                       )}
                       <button type="button" onClick={() => void handleTenantToggle(tenant)} className="px-3 py-2 bg-amber-600 text-white text-sm rounded">{tenant.isActive ? 'Disable' : 'Enable'}</button>
                       <button type="button" onClick={() => void handleTenantDeactivate(tenant)} className="px-3 py-2 bg-orange-600 text-white text-sm rounded">Soft Disable</button>

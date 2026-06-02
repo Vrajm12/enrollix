@@ -12,7 +12,8 @@ const dateRangeSchema = z.object({
   endDate: z.string().datetime().optional(),
   state: z.string().trim().optional(),
   city: z.string().trim().optional(),
-  locality: z.string().trim().optional()
+  locality: z.string().trim().optional(),
+  source: z.string().trim().optional()
 });
 
 const buildLeadAccessWhere = (req: Request): Prisma.LeadWhereInput => {
@@ -32,7 +33,8 @@ const applyLocationFilters = (
   baseWhere: Prisma.LeadWhereInput,
   state?: string,
   city?: string,
-  locality?: string
+  locality?: string,
+  source?: string
 ): Prisma.LeadWhereInput => {
   const andFilters: Prisma.LeadWhereInput[] = [];
   if (state) {
@@ -50,6 +52,11 @@ const applyLocationFilters = (
       locality: { contains: locality, mode: "insensitive" }
     });
   }
+  if (source) {
+    andFilters.push({
+      source: { contains: source, mode: "insensitive" }
+    });
+  }
   if (andFilters.length === 0) {
     return baseWhere;
   }
@@ -65,7 +72,8 @@ router.get(
       endDate: req.query.endDate,
       state: req.query.state,
       city: req.query.city,
-      locality: req.query.locality
+      locality: req.query.locality,
+      source: req.query.source
     });
 
     if (!parsed.success) {
@@ -79,7 +87,13 @@ router.get(
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
-    const where = applyLocationFilters(whereBase, parsed.data.state, parsed.data.city, parsed.data.locality);
+    const where = applyLocationFilters(
+      whereBase,
+      parsed.data.state,
+      parsed.data.city,
+      parsed.data.locality,
+      parsed.data.source
+    );
 
     const statuses = Object.values(LeadStatus);
     const funnel = await Promise.all(
@@ -115,7 +129,8 @@ router.get(
       endDate: req.query.endDate,
       state: req.query.state,
       city: req.query.city,
-      locality: req.query.locality
+      locality: req.query.locality,
+      source: req.query.source
     });
 
     if (!parsed.success) {
@@ -129,7 +144,13 @@ router.get(
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
-    const where = applyLocationFilters(whereBase, parsed.data.state, parsed.data.city, parsed.data.locality);
+    const where = applyLocationFilters(
+      whereBase,
+      parsed.data.state,
+      parsed.data.city,
+      parsed.data.locality,
+      parsed.data.source
+    );
 
     const enrolled = await prisma.lead.count({
       where: { ...where, status: LeadStatus.ENROLLED }
@@ -184,7 +205,8 @@ router.get(
       endDate: req.query.endDate,
       state: req.query.state,
       city: req.query.city,
-      locality: req.query.locality
+      locality: req.query.locality,
+      source: req.query.source
     });
 
     if (!parsed.success) {
@@ -202,7 +224,8 @@ router.get(
       leadWhereBaseRaw,
       parsed.data.state,
       parsed.data.city,
-      parsed.data.locality
+      parsed.data.locality,
+      parsed.data.source
     );
 
     const messageWhereBase = {
@@ -293,7 +316,8 @@ router.get(
       endDate: req.query.endDate,
       state: req.query.state,
       city: req.query.city,
-      locality: req.query.locality
+      locality: req.query.locality,
+      source: req.query.source
     });
 
     if (!parsed.success) {
@@ -307,7 +331,13 @@ router.get(
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
-    const where = applyLocationFilters(whereBase, parsed.data.state, parsed.data.city, parsed.data.locality);
+    const where = applyLocationFilters(
+      whereBase,
+      parsed.data.state,
+      parsed.data.city,
+      parsed.data.locality,
+      parsed.data.source
+    );
 
     const leads = await prisma.lead.findMany({
       where,
@@ -368,7 +398,8 @@ router.get(
       endDate: req.query.endDate,
       state: req.query.state,
       city: req.query.city,
-      locality: req.query.locality
+      locality: req.query.locality,
+      source: req.query.source
     });
 
     if (!parsed.success) {
@@ -382,7 +413,13 @@ router.get(
         ...(parsed.data.endDate && { lte: new Date(parsed.data.endDate) })
       }
     };
-    const where = applyLocationFilters(whereBase, parsed.data.state, parsed.data.city, parsed.data.locality);
+    const where = applyLocationFilters(
+      whereBase,
+      parsed.data.state,
+      parsed.data.city,
+      parsed.data.locality,
+      parsed.data.source
+    );
 
     const priorities = ["COLD", "WARM", "HOT"] as const;
     const distribution = await Promise.all(

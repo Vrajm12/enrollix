@@ -30,7 +30,8 @@ export const SOURCES = [
   "Social Media",
   "Referral",
   "Advertisement",
-  "Walk-in"
+  "Walk-in",
+  "Collegedunia"
 ];
 
 export const STUDENT_CASTE_CATEGORIES = [

@@ -109,6 +109,7 @@ router.get(
     const locality = typeof req.query.locality === "string" ? req.query.locality.trim() : "";
     const pincode = typeof req.query.pincode === "string" ? req.query.pincode.trim() : "";
     const course = typeof req.query.course === "string" ? req.query.course.trim() : "";
+    const source = typeof req.query.source === "string" ? req.query.source.trim() : "";
     const tenantFilter = { tenantId: req.user!.tenantId };
 
     const baseWhere =
@@ -144,6 +145,12 @@ router.get(
     if (course) {
       andFilters.push({
         course: { contains: course, mode: "insensitive" }
+      });
+    }
+
+    if (source) {
+      andFilters.push({
+        source: { contains: source, mode: "insensitive" }
       });
     }
 
