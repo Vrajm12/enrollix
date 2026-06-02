@@ -1,4 +1,4 @@
-# Collegedunia Lead Integration API (Guruverse CRM)
+# Collegedunia Lead Integration API
 
 ## Base URL
 
@@ -6,22 +6,25 @@
 https://api.guruverse.co.in
 ```
 
-Integration Version: v1.0
-Last Updated: 01 June 2026
+## Lead Creation Endpoint
 
----
-
-# Lead Creation Endpoint
-
-## Endpoint
-
-**Method:** POST
+Method:
 
 ```http
-POST /integrations/partner/collegedunia/leads
+POST
 ```
 
-**Content-Type:** `application/json`
+Endpoint:
+
+```http
+/integrations/partner/collegedunia/leads
+```
+
+Full URL:
+
+```text
+https://api.guruverse.co.in/integrations/partner/collegedunia/leads
+```
 
 Backward-compatible alias:
 
@@ -29,160 +32,179 @@ Backward-compatible alias:
 POST /integrations/collegedunia/leads
 ```
 
----
+Content type:
+
+```http
+application/json
+```
 
 ## Authentication
 
-Provide both headers:
+Please pass the following headers with every lead creation request:
 
 ```http
 X-Tenant-Slug: dvcoe
 X-API-Key: YOUR_COLLEGEDUNIA_API_KEY
 ```
 
-Alternative:
+The API key will be shared separately through a secure communication channel.
 
-```http
-Authorization: Bearer YOUR_COLLEGEDUNIA_API_KEY
+## Request Body
+
+Required fields:
+
+```text
+name
+phone
 ```
 
-API Key will be shared separately through a secure communication channel.
+Optional fields:
 
----
+```text
+email
+state
+city
+district
+locality
+pincode
+course
+source
+medium
+campaign
+externalLeadId
+```
 
-## Sample Request
+## Field Mapping
 
-```bash
-curl -X POST "https://api.guruverse.co.in/integrations/partner/collegedunia/leads" \
--H "Content-Type: application/json" \
--H "X-Tenant-Slug: dvcoe" \
--H "X-API-Key: YOUR_COLLEGEDUNIA_API_KEY" \
--d '{
+```text
+name = student name
+phone = mobile number
+email = student email
+state = state
+city = city
+district = district
+locality = city/town/village/local area
+pincode = postal code
+course = selected course
+source = Collegedunia constant
+medium = dynamic value from Collegedunia
+campaign = dynamic campaign name from Collegedunia
+externalLeadId = Collegedunia unique lead ID
+```
+
+## Source, Medium, And Campaign
+
+The CRM source is automatically set as:
+
+```text
+Collegedunia
+```
+
+Collegedunia may also send `source` in the request body as:
+
+```json
+{
+  "source": "Collegedunia"
+}
+```
+
+The `medium` and `campaign` parameters are dynamic and should be sent when available.
+
+Example:
+
+```json
+{
+  "source": "Collegedunia",
+  "medium": "Website Form",
+  "campaign": "DVCOE June Admissions"
+}
+```
+
+## Sample JSON Request Body
+
+```json
+{
   "name": "Aarav Sharma",
   "phone": "+919876543210",
   "email": "aarav@example.com",
-  "course": "MBA",
-  "city": "Pune",
   "state": "Maharashtra",
-  "campaign": "June MBA Push",
-  "source": "CD Search Form",
+  "city": "Pune",
+  "district": "Pune",
+  "locality": "Pimpri",
+  "pincode": "411018",
+  "course": "Computer Engineering",
+  "source": "Collegedunia",
+  "medium": "Website Form",
+  "campaign": "DVCOE June Admissions",
   "externalLeadId": "CD-LEAD-102938"
-}'
+}
 ```
 
----
+## Sample cURL Request
 
-## Supported Payload Fields
+```bash
+curl -X POST "https://api.guruverse.co.in/integrations/partner/collegedunia/leads" \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-Slug: dvcoe" \
+  -H "X-API-Key: YOUR_COLLEGEDUNIA_API_KEY" \
+  -d '{
+    "name": "Aarav Sharma",
+    "phone": "+919876543210",
+    "email": "aarav@example.com",
+    "state": "Maharashtra",
+    "city": "Pune",
+    "district": "Pune",
+    "locality": "Pimpri",
+    "pincode": "411018",
+    "course": "Computer Engineering",
+    "source": "Collegedunia",
+    "medium": "Website Form",
+    "campaign": "DVCOE June Admissions",
+    "externalLeadId": "CD-LEAD-102938"
+  }'
+```
 
-### Required
-
-| Field | Type   |
-| ----- | ------ |
-| name  | string |
-| phone | string |
-
-### Optional
-
-| Field          | Type   |
-| -------------- | ------ |
-| email          | string |
-| address        | string |
-| state          | string |
-| district       | string |
-| locality       | string |
-| city           | string |
-| region         | string |
-| pincode        | string |
-| course         | string |
-| campaign       | string |
-| source         | string |
-| externalLeadId | string |
-
----
-
-## Supported Alias Fields
-
-The following aliases are also accepted:
+## Lead Processing Rules
 
 ```text
-full_name
-student_name
-mobile_number
-phone_number
-email_id
-campaign_name
-lead_source
-utm_source
+CRM source is auto-set as Collegedunia.
+medium is stored if provided.
+campaign is stored if provided.
+Duplicate check is performed by phone first.
+If phone is not duplicate, duplicate check is performed by email.
+If duplicate is found, the API returns the existing leadId.
 ```
 
----
+## Success Response
 
-# Lead Processing Rules
-
-### Source Assignment
-
-All leads received through this endpoint are automatically tagged as:
+HTTP status:
 
 ```text
-Source = Collegedunia
-Partner = Collegedunia
+201 Created
 ```
 
----
-
-### Campaign Tracking
-
-If provided:
-
-```text
-campaign → campaign
-source → partnerSource
-externalLeadId → externalLeadId
-```
-
-These values are stored for reporting and attribution.
-
----
-
-### Duplicate Detection
-
-Guruverse CRM checks duplicates in the following order:
-
-1. Phone Number
-2. Email Address
-
-If a duplicate lead exists:
-
-* Existing lead remains unchanged
-* Existing Lead ID is returned
-* Duplicate activity is logged
-* Latest enquiry timestamp is updated
-
----
-
-# Success Response
-
-### Lead Created
-
-**HTTP 201**
+Response:
 
 ```json
 {
   "success": true,
   "data": {
     "leadId": 1234,
-    "externalLeadId": "CD-LEAD-102938",
     "status": "CREATED",
     "source": "Collegedunia"
   }
 }
 ```
 
----
+## Duplicate Response
 
-# Duplicate Lead Response
+HTTP status:
 
-**HTTP 409**
+```text
+409 Conflict
+```
+
+Response:
 
 ```json
 {
@@ -196,11 +218,29 @@ If a duplicate lead exists:
 }
 ```
 
----
+Duplicate by email example:
 
-# Validation Error
+```json
+{
+  "success": false,
+  "error": {
+    "code": "DUPLICATE_LEAD",
+    "message": "Lead already exists",
+    "duplicateBy": "email",
+    "leadId": 987
+  }
+}
+```
 
-**HTTP 400**
+## Validation Error Response
+
+HTTP status:
+
+```text
+400 Bad Request
+```
+
+Response:
 
 ```json
 {
@@ -212,11 +252,15 @@ If a duplicate lead exists:
 }
 ```
 
----
+## Authentication Error Response
 
-# Authentication Error
+HTTP status:
 
-**HTTP 401**
+```text
+401 Unauthorized
+```
+
+Response:
 
 ```json
 {
@@ -228,30 +272,44 @@ If a duplicate lead exists:
 }
 ```
 
----
+## Rate Limit Error Response
 
-# Rate Limit Error
+HTTP status:
 
-**HTTP 429**
+```text
+429 Too Many Requests
+```
+
+Response:
 
 ```json
 {
   "success": false,
   "error": {
     "code": "RATE_LIMIT_EXCEEDED",
-    "message": "Rate limit exceeded. Please retry later."
+    "message": "Rate limit exceeded. Please retry after a minute."
   }
 }
 ```
 
----
+## Health Check Endpoint
 
-# Health Check Endpoint
-
-For connectivity testing:
+Method:
 
 ```http
-GET /integrations/partner/collegedunia/health
+GET
+```
+
+Endpoint:
+
+```http
+/integrations/partner/collegedunia/health
+```
+
+Full URL:
+
+```text
+https://api.guruverse.co.in/integrations/partner/collegedunia/health
 ```
 
 Backward-compatible alias:
@@ -260,7 +318,7 @@ Backward-compatible alias:
 GET /integrations/collegedunia/health
 ```
 
-### Response
+Response:
 
 ```json
 {
@@ -269,66 +327,13 @@ GET /integrations/collegedunia/health
 }
 ```
 
----
-
-# Rate Limiting
-
-Default policy:
+## Course List For DVCOE
 
 ```text
-60 requests per minute
-Per API Key
-Per Tenant
-```
+Computer Engineering
+Artificial Intelligence and Machine Learning
+Information Technology
+Electronics and Telecommunication Engineering
 
-Can be adjusted upon request.
 
----
-
-# Audit & Tracking
-
-Every API submission is logged with:
-
-```text
-Tenant
-Partner
-IP Address
-User Agent
-Timestamp
-Status
-Duplicate Reason (if any)
-```
-
-Audit Action:
-
-```text
-INTEGRATION_LEAD_RECEIVED
-```
-
----
-
-# Security
-
-Guruverse CRM supports:
-
-* API Key Authentication
-* Tenant Isolation
-* Audit Logging
-* Rate Limiting
-* Duplicate Detection
-* HTTPS Encryption
-
-Additional IP whitelisting can be enabled upon request.
-
----
-
-# Support
-
-For technical support or integration assistance:
-
-```text
-Guruverse CRM API Team
-
-Email: gurubrandingservices@gmail.com
-Website: https://guruverse.co.in
-```
+If Collegedunia uses different course names, they can share their exact course labels and Guruverse team will map them with CRM course values.

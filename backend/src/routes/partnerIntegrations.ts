@@ -37,6 +37,7 @@ const partnerLeadSchema = z
     pincode: z.string().trim().optional().or(z.literal("")),
     course: z.string().trim().optional().or(z.literal("")),
     campaign: z.string().trim().optional().or(z.literal("")),
+    medium: z.string().trim().optional().or(z.literal("")),
     source: z.string().trim().optional().or(z.literal("")),
     externalLeadId: z.string().trim().optional().or(z.literal(""))
   })
@@ -110,11 +111,12 @@ const mapInboundLeadPayload = (body: unknown) => {
     email: pickString(raw, ["email", "email_id", "emailId"]),
     address: pickString(raw, ["address"]),
     region: pickString(raw, ["region", "state"]),
-    city: pickString(raw, ["city"]),
+    city: pickString(raw, ["city", "district"]),
     locality: pickString(raw, ["locality", "area"]),
     pincode: pickString(raw, ["pincode", "pin", "postal_code"]),
     course: pickString(raw, ["course", "program", "interested_course"]),
     campaign: pickString(raw, ["campaign", "campaign_name", "utm_campaign"]),
+    medium: pickString(raw, ["medium", "utm_medium"]),
     source: pickString(raw, ["source", "lead_source", "utm_source"]),
     externalLeadId: pickString(raw, ["externalLeadId", "external_lead_id", "lead_id"])
   };
@@ -396,6 +398,7 @@ const createPartnerLeadIngestionHandler = (config: PartnerLeadIntegrationConfig)
           duplicateLeadId: duplicateByPhone.id,
           phone: payload.phone,
           campaign: toNullable(payload.campaign),
+          medium: toNullable(payload.medium),
           partnerSource: toNullable(payload.source)
         }
       });
@@ -428,6 +431,7 @@ const createPartnerLeadIngestionHandler = (config: PartnerLeadIntegrationConfig)
             duplicateLeadId: duplicateByEmail.id,
             email: emailValue,
             campaign: toNullable(payload.campaign),
+            medium: toNullable(payload.medium),
             partnerSource: toNullable(payload.source)
           }
         });
@@ -458,6 +462,7 @@ const createPartnerLeadIngestionHandler = (config: PartnerLeadIntegrationConfig)
         course: toNullable(payload.course),
         source: config.leadSource,
         campaign: toNullable(payload.campaign),
+        medium: toNullable(payload.medium),
         partnerSource: toNullable(payload.source),
         status: LeadStatus.LEAD,
         priority: Priority.COLD
@@ -469,6 +474,7 @@ const createPartnerLeadIngestionHandler = (config: PartnerLeadIntegrationConfig)
         email: true,
         source: true,
         campaign: true,
+        medium: true,
         partnerSource: true,
         createdAt: true
       }
@@ -488,6 +494,7 @@ const createPartnerLeadIngestionHandler = (config: PartnerLeadIntegrationConfig)
         leadId: createdLead.id,
         externalLeadId: toNullable(payload.externalLeadId),
         campaign: toNullable(payload.campaign),
+        medium: toNullable(payload.medium),
         partnerSource: toNullable(payload.source)
       }
     });

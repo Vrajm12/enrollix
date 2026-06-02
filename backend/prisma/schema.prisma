@@ -108,6 +108,7 @@ model Lead {
   course           String?
   source           String?
   campaign         String?
+  medium           String?
   partnerSource    String?     @map("partner_source")
   status           LeadStatus  @default(LEAD)
   priority         Priority    @default(COLD)
