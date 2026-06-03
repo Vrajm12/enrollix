@@ -164,6 +164,35 @@ curl -X POST "https://api.guruverse.co.in/integrations/partner/collegedunia/lead
   }'
 ```
 
+## Testing Notes
+
+Before sending a lead, verify that the API is reachable:
+
+```bash
+curl "https://api.guruverse.co.in/integrations/partner/collegedunia/health"
+```
+
+Expected response:
+
+```json
+{
+  "success": true,
+  "status": "OK"
+}
+```
+
+If Postman shows `Cloud Agent Error: Unable to reach the Cloud Agent`, the request was not sent to Guruverse. Use Postman's Desktop Agent, switch to a different Postman agent, or test from a terminal with `curl`.
+
+On Windows PowerShell, prefer saving the JSON body to a file and sending it with `--data-binary` to avoid quote escaping issues:
+
+```powershell
+curl.exe -X POST "https://api.guruverse.co.in/integrations/partner/collegedunia/leads" `
+  -H "Content-Type: application/json" `
+  -H "X-Tenant-Slug: dvcoe" `
+  -H "X-API-Key: YOUR_COLLEGEDUNIA_API_KEY" `
+  --data-binary "@lead.json"
+```
+
 ## Lead Processing Rules
 
 ```text
@@ -337,3 +366,4 @@ Electronics and Telecommunication Engineering
 
 
 If Collegedunia uses different course names, they can share their exact course labels and Guruverse team will map them with CRM course values.
+```
