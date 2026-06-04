@@ -183,6 +183,7 @@ export const api = {
   getLead: (id: number) => request<Lead>(`/leads/${id}`),
   getLeadPincodes: () => request<{ pincodes: string[] }>("/leads/meta/pincodes"),
   getLeadLocalities: () => request<{ localities: string[] }>("/leads/meta/localities"),
+  getLeadSources: () => request<{ sources: string[] }>("/leads/meta/sources"),
   createLead: (payload: Partial<Lead>) =>
     request<Lead>("/leads", {
       method: "POST",
@@ -478,19 +479,30 @@ export const api = {
       };
       temporaryPassword: string;
     }>("/users/team", { method: "POST", body: payload }),
-  allocateLeadRange: (payload: { userId: number; startLeadNumber: number; endLeadNumber: number; pincode?: string }) =>
+  allocateLeadRange: (payload: { userId: number; startLeadNumber: number; endLeadNumber: number; pincode?: string; source?: string }) =>
     request<{
       success: boolean;
       message: string;
       allocatedCount: number;
       range: { startLeadNumber: number; endLeadNumber: number };
       pincode: string | null;
+      source: string | null;
       totalAvailableLeads: number;
       assignee: { id: number; name: string; email: string; role: "ADMIN" | "COUNSELOR" };
     }>("/users/team/allocate-leads", {
       method: "POST",
       body: payload
     }),
+  getLeadAllocationSummary: (filters: { pincode?: string; source?: string }) => {
+    const params = new URLSearchParams();
+    if (filters.pincode) params.append("pincode", filters.pincode);
+    if (filters.source) params.append("source", filters.source);
+    return request<{
+      pincode: string | null;
+      source: string | null;
+      availableLeads: number;
+    }>(`/users/team/allocate-leads/summary?${params.toString()}`);
+  },
   getLeadAllocationPincodeSummary: (pincode: string) =>
     request<{
       pincode: string;

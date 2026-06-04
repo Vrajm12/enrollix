@@ -55,26 +55,30 @@ export default function TeamsPage() {
   const [form, setForm] = useState({ name: "", email: "", role: "COUNSELOR" as "ADMIN" | "COUNSELOR" });
   const [allocating, setAllocating] = useState(false);
   const [allocationPincodes, setAllocationPincodes] = useState<string[]>([]);
-  const [availableLeadsForPincode, setAvailableLeadsForPincode] = useState<number | null>(null);
-  const [loadingPincodeSummary, setLoadingPincodeSummary] = useState(false);
+  const [allocationSources, setAllocationSources] = useState<string[]>([]);
+  const [availableLeadsForAllocation, setAvailableLeadsForAllocation] = useState<number | null>(null);
+  const [loadingAllocationSummary, setLoadingAllocationSummary] = useState(false);
   const [allocationForm, setAllocationForm] = useState({
     userId: "",
     pincode: "",
+    source: "",
     startLeadNumber: "",
     endLeadNumber: ""
   });
 
   const loadUsers = async (includePincodes: boolean) => {
     try {
-      const [result, teamInsights, pincodeData] = await Promise.all([
+      const [result, teamInsights, pincodeData, sourceData] = await Promise.all([
         api.getTeamUsers(),
         api.getTeamInsights(),
-        includePincodes ? api.getLeadPincodes() : Promise.resolve({ pincodes: [] })
+        includePincodes ? api.getLeadPincodes() : Promise.resolve({ pincodes: [] }),
+        includePincodes ? api.getLeadSources() : Promise.resolve({ sources: [] })
       ]);
       setUsers(result.users);
       setInsights(teamInsights.users);
       setTenantSummary(teamInsights.tenantSummary);
       setAllocationPincodes(pincodeData.pincodes);
+      setAllocationSources(sourceData.sources);
       setError("");
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -138,19 +142,24 @@ export default function TeamsPage() {
     const userId = Number(allocationForm.userId);
     const startLeadNumber = Number(allocationForm.startLeadNumber);
     const endLeadNumber = Number(allocationForm.endLeadNumber);
+    const hasAllocationFilter = Boolean(allocationForm.pincode || allocationForm.source);
+    const allocationScope = [
+      allocationForm.pincode ? `pincode ${allocationForm.pincode}` : "",
+      allocationForm.source ? `source ${allocationForm.source}` : ""
+    ].filter(Boolean).join(" and ");
 
-    if (!userId || !allocationForm.pincode || !startLeadNumber || !endLeadNumber) {
-      setError("User, pincode, and lead range are required.");
+    if (!userId || !hasAllocationFilter || !startLeadNumber || !endLeadNumber) {
+      setError("User, pincode or source, and lead range are required.");
       return;
     }
 
-    if (availableLeadsForPincode === null) {
-      setError("Lead availability is still loading for the selected pincode.");
+    if (availableLeadsForAllocation === null) {
+      setError("Lead availability is still loading for the selected filters.");
       return;
     }
 
-    if (startLeadNumber > availableLeadsForPincode) {
-      setError(`Start lead number exceeds available leads for pincode ${allocationForm.pincode} (${availableLeadsForPincode}).`);
+    if (startLeadNumber > availableLeadsForAllocation) {
+      setError(`Start lead number exceeds available leads for ${allocationScope} (${availableLeadsForAllocation}).`);
       return;
     }
 
@@ -158,15 +167,16 @@ export default function TeamsPage() {
       setAllocating(true);
       const result = await api.allocateLeadRange({
         userId,
-        pincode: allocationForm.pincode,
+        pincode: allocationForm.pincode || undefined,
+        source: allocationForm.source || undefined,
         startLeadNumber,
         endLeadNumber
       });
       setSuccess(
-        `${result.message}. Pincode lead range: ${result.range.startLeadNumber}-${result.range.endLeadNumber}.`
+        `${result.message}. Lead range: ${result.range.startLeadNumber}-${result.range.endLeadNumber}.`
       );
-      setAllocationForm({ userId: "", pincode: "", startLeadNumber: "", endLeadNumber: "" });
-      setAvailableLeadsForPincode(null);
+      setAllocationForm({ userId: "", pincode: "", source: "", startLeadNumber: "", endLeadNumber: "" });
+      setAvailableLeadsForAllocation(null);
       await loadUsers(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to allocate leads");
@@ -180,36 +190,39 @@ export default function TeamsPage() {
       return;
     }
 
-    if (!allocationForm.pincode) {
-      setAvailableLeadsForPincode(null);
+    if (!allocationForm.pincode && !allocationForm.source) {
+      setAvailableLeadsForAllocation(null);
       return;
     }
 
     let ignore = false;
-    const loadPincodeSummary = async () => {
+    const loadAllocationSummary = async () => {
       try {
-        setLoadingPincodeSummary(true);
-        const result = await api.getLeadAllocationPincodeSummary(allocationForm.pincode);
+        setLoadingAllocationSummary(true);
+        const result = await api.getLeadAllocationSummary({
+          pincode: allocationForm.pincode || undefined,
+          source: allocationForm.source || undefined
+        });
         if (!ignore) {
-          setAvailableLeadsForPincode(result.availableLeads);
+          setAvailableLeadsForAllocation(result.availableLeads);
         }
       } catch (err) {
         if (!ignore) {
-          setAvailableLeadsForPincode(null);
-          setError(err instanceof Error ? err.message : "Unable to load pincode lead availability");
+          setAvailableLeadsForAllocation(null);
+          setError(err instanceof Error ? err.message : "Unable to load lead availability");
         }
       } finally {
         if (!ignore) {
-          setLoadingPincodeSummary(false);
+          setLoadingAllocationSummary(false);
         }
       }
     };
 
-    void loadPincodeSummary();
+    void loadAllocationSummary();
     return () => {
       ignore = true;
     };
-  }, [allocationForm.pincode, canAllocateLeads]);
+  }, [allocationForm.pincode, allocationForm.source, canAllocateLeads]);
 
   if (loading) return <div className="p-6 text-sm text-slate-600">Loading team...</div>;
 
@@ -239,7 +252,7 @@ export default function TeamsPage() {
             {canAllocateLeads ? (
               <form onSubmit={onAllocate} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                 <h2 className="text-lg font-semibold">Allocate Leads (Tenant Admin)</h2>
-                <p className="text-sm text-slate-600">Select user and pincode, then assign a range from available leads in that pincode.</p>
+                <p className="text-sm text-slate-600">Select user and filter leads by pincode, source, or both before assigning a range.</p>
                 <select
                   className="w-full rounded-lg border border-slate-300 px-3 py-2"
                   value={allocationForm.userId}
@@ -266,20 +279,38 @@ export default function TeamsPage() {
                       endLeadNumber: ""
                     }))
                   }
-                  required
                 >
-                  <option value="">Select pincode</option>
+                  <option value="">All pincodes</option>
                   {allocationPincodes.map((pincode) => (
                     <option key={pincode} value={pincode}>
                       {pincode}
                     </option>
                   ))}
                 </select>
-                {allocationForm.pincode ? (
+                <select
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2"
+                  value={allocationForm.source}
+                  onChange={(e) =>
+                    setAllocationForm((current) => ({
+                      ...current,
+                      source: e.target.value,
+                      startLeadNumber: "",
+                      endLeadNumber: ""
+                    }))
+                  }
+                >
+                  <option value="">All sources</option>
+                  {allocationSources.map((source) => (
+                    <option key={source} value={source}>
+                      {source}
+                    </option>
+                  ))}
+                </select>
+                {allocationForm.pincode || allocationForm.source ? (
                   <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    {loadingPincodeSummary
+                    {loadingAllocationSummary
                       ? "Loading leads available..."
-                      : `Available leads in ${allocationForm.pincode}: ${availableLeadsForPincode ?? 0}`}
+                      : `Available leads for selected filters: ${availableLeadsForAllocation ?? 0}`}
                   </div>
                 ) : null}
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -305,7 +336,7 @@ export default function TeamsPage() {
                 <button
                   className="w-full rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
                   type="submit"
-                  disabled={allocating || loadingPincodeSummary || !allocationForm.pincode}
+                  disabled={allocating || loadingAllocationSummary || (!allocationForm.pincode && !allocationForm.source)}
                 >
                   {allocating ? "Allocating..." : "Assign Lead Range"}
                 </button>

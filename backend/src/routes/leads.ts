@@ -349,6 +349,27 @@ router.get(
 );
 
 router.get(
+  "/meta/sources",
+  asyncHandler(async (req, res) => {
+    const where: Prisma.LeadWhereInput =
+      req.user?.role === Role.TENANT_ADMIN || req.user?.role === Role.SUPER_ADMIN
+        ? { tenantId: req.user!.tenantId, source: { not: null } }
+        : { tenantId: req.user!.tenantId, assignedTo: req.user!.id, source: { not: null } };
+
+    const rows = await prisma.lead.findMany({
+      where,
+      select: { source: true },
+      distinct: ["source"],
+      orderBy: { source: "asc" }
+    });
+
+    return res.json({
+      sources: rows.map((row) => row.source).filter((value): value is string => Boolean(value))
+    });
+  })
+);
+
+router.get(
   "/:id",
   asyncHandler(async (req, res) => {
     const leadId = parseLeadId(req.params.id);
