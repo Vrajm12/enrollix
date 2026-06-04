@@ -64,9 +64,23 @@ const request = async <T>(
     }
   }
 
-  const data = await response.json().catch(() => ({}));
+  const responseText = await response.text();
+  let data: unknown = {};
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = { message: responseText };
+    }
+  }
   if (!response.ok) {
-    const message = data?.message ?? "API request failed";
+    const message =
+      data &&
+      typeof data === "object" &&
+      "message" in data &&
+      typeof (data as { message?: unknown }).message === "string"
+        ? (data as { message: string }).message
+        : "API request failed";
     throw new ApiError(message, response.status);
   }
 

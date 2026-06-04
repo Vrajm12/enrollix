@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import { ipKeyGenerator } from "express-rate-limit";
+import type { Options } from "express-rate-limit";
 import { env } from "./config.js";
 import { requireAuth } from "./middleware/auth.js";
 import { errorHandler, notFoundHandler } from "./middleware/error.js";
@@ -66,11 +67,28 @@ const isAllowedSubdomainOrigin = (origin: string) => {
   }
 };
 
+const rateLimitJsonHandler: Options["handler"] = (_req, res, _next, options) => {
+  const message = typeof options.message === "string" ? options.message : "Too many requests";
+  return res.status(options.statusCode).json({
+    success: false,
+    message
+  });
+};
+
+const authenticatedUserKey = (req: express.Request) => {
+  const user = (req as any).user;
+  if (user?.id && user?.tenantId) {
+    return `tenant:${user.tenantId}:user:${user.id}`;
+  }
+  return ipKeyGenerator(req.ip ?? req.socket.remoteAddress ?? "unknown");
+};
+
 // Rate limiting middleware - Auth endpoint (strict)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 attempts per 15 minutes
   message: "Too many login attempts, please try again later",
+  handler: rateLimitJsonHandler,
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   skipSuccessfulRequests: true,
@@ -90,9 +108,12 @@ const authLimiter = rateLimit({
 // Rate limiting middleware - General API (moderate)
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per 15 minutes
+  max: 1000, // Normal CRM pages make several parallel API calls per navigation.
+  message: "Too many API requests, please wait a minute and try again.",
+  handler: rateLimitJsonHandler,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: authenticatedUserKey,
   skip: (req) => {
     // Don't rate limit super admins (if user has role)
     return (req as any).user?.role === "SUPER_ADMIN";
@@ -104,8 +125,10 @@ const bulkLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // 10 bulk operations per hour
   message: "Bulk operation limit exceeded, please try again later",
+  handler: rateLimitJsonHandler,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: authenticatedUserKey,
   skip: (req) => {
     // CSV import can require many chunk/commit calls for large files.
     // Do not throttle these paths with the strict bulk limiter.
@@ -191,20 +214,20 @@ app.use("/auth", authLimiter, authRouter);
 app.use("/admin", apiLimiter, adminRouter);
 
 // Apply tenant context middleware to all protected routes
-app.use("/dashboard", apiLimiter, requireAuth, tenantContext, dashboardRouter);
-app.use("/leads", apiLimiter, requireAuth, tenantContext, leadsRouter);
-app.use("/activities", apiLimiter, requireAuth, tenantContext, activitiesRouter);
-app.use("/bulk", bulkLimiter, requireAuth, tenantContext, bulkRouter);
+app.use("/dashboard", requireAuth, apiLimiter, tenantContext, dashboardRouter);
+app.use("/leads", requireAuth, apiLimiter, tenantContext, leadsRouter);
+app.use("/activities", requireAuth, apiLimiter, tenantContext, activitiesRouter);
+app.use("/bulk", requireAuth, bulkLimiter, tenantContext, bulkRouter);
 
 // Middleware for messaging routes - skip auth for webhook
 app.use("/messaging", (req, res, next) => {
   if (req.path === "/webhooks/sms-status" && req.method === "POST") {
     next();
   } else {
-    apiLimiter(req, res, (err) => {
+    requireAuth(req, res, (err) => {
       if (err) return;
-      requireAuth(req, res, (err) => {
-        if (err) return res.status(401).json({ message: "Unauthorized" });
+      apiLimiter(req, res, (err) => {
+        if (err) return;
         tenantContext(req, res, next);
       });
     });
@@ -212,8 +235,8 @@ app.use("/messaging", (req, res, next) => {
 });
 app.use("/messaging", messagingRouter);
 
-app.use("/reports", apiLimiter, requireAuth, tenantContext, reportingRouter);
-app.use("/users", apiLimiter, requireAuth, tenantContext, usersRouter);
+app.use("/reports", requireAuth, apiLimiter, tenantContext, reportingRouter);
+app.use("/users", requireAuth, apiLimiter, tenantContext, usersRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
