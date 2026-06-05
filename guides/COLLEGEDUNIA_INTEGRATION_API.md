@@ -360,7 +360,7 @@ Response:
 
 ```text
 Computer Engineering
-Artificial Intelligence and Machine Learning
+AIML
 Information Technology
 Electronics and Telecommunication Engineering
 
