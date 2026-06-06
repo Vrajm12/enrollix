@@ -50,6 +50,14 @@ enum Priority {
   HOT
 }
 
+enum BackupStatus {
+  CREATED
+  FAILED
+  RESTORED
+  RESTORE_FAILED
+  DELETED
+}
+
 model Tenant {
   id            Int      @id @default(autoincrement())
   name          String
@@ -173,6 +181,26 @@ model LeadAssignmentBatch {
   @@index([assignedTo])
   @@index([createdAt])
   @@map("lead_assignment_batches")
+}
+
+model BackupRecord {
+  id               Int          @id @default(autoincrement())
+  filename         String
+  filePath         String       @map("file_path")
+  fileSize         BigInt       @default(0) @map("file_size")
+  status           BackupStatus
+  createdByUserId  Int?         @map("created_by_user_id")
+  restoredByUserId Int?         @map("restored_by_user_id")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  restoredAt       DateTime?    @map("restored_at")
+  notes            String?
+  checksum         String?
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([createdByUserId])
+  @@index([restoredByUserId])
+  @@map("backup_records")
 }
 
 model IntegrationApiKey {

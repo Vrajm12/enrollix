@@ -15,6 +15,7 @@ import {
   Package,
   LogOut,
   Shield,
+  Database,
 } from 'lucide-react';
 import { EnrollixLogoCompact } from '@/components/EnrollixLogo';
 import { clearSession, getUser } from '@/lib/auth';
@@ -47,6 +48,12 @@ export default function Sidebar() {
             label: 'Super Admin',
             href: '/admin',
             icon: Shield,
+            section: 'main',
+          },
+          {
+            label: 'Backups',
+            href: '/admin/backups',
+            icon: Database,
             section: 'main',
           },
         ]
