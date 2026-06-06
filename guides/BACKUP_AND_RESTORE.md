@@ -29,7 +29,7 @@ DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public
 ## Create Backup From UI
 
 1. Login as `SUPER_ADMIN`.
-2. Open `/admin/backups`.
+2. Open `/bckup`.
 3. Click `Create Backup`.
 4. Confirm the new backup appears with status `CREATED`.
 
@@ -42,7 +42,7 @@ guruverse_backup_YYYY-MM-DD_HH-mm-ss.sql
 ## Download Backup
 
 1. Login as `SUPER_ADMIN`.
-2. Open `/admin/backups`.
+2. Open `/bckup`.
 3. Click `Download` on the required backup.
 
 The API never returns the server file path. Downloads are resolved server-side by backup ID.
@@ -50,7 +50,7 @@ The API never returns the server file path. Downloads are resolved server-side b
 ## Restore Backup Safely
 
 1. Login as `SUPER_ADMIN`.
-2. Open `/admin/backups`.
+2. Open `/bckup`.
 3. Click `Restore` on the required backup.
 4. Read the warning.
 5. Type exactly:

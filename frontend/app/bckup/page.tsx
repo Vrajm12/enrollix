@@ -74,7 +74,7 @@ export default function BackupManagementPage() {
   const loadBackups = async () => {
     try {
       setLoading(true);
-      const data = await authJson<{ backups: BackupRecord[] }>("/admin/backups");
+      const data = await authJson<{ backups: BackupRecord[] }>("/bckup");
       setBackups(data.backups);
       setError("");
     } catch (err) {
@@ -96,7 +96,7 @@ export default function BackupManagementPage() {
   const createBackup = async () => {
     try {
       setCreating(true);
-      const data = await authJson<{ backup: BackupRecord }>("/admin/backups/create", { method: "POST" });
+      const data = await authJson<{ backup: BackupRecord }>("/bckup/create", { method: "POST" });
       setBackups((current) => [data.backup, ...current]);
       setSuccess("Backup created successfully.");
       setError("");
@@ -110,7 +110,7 @@ export default function BackupManagementPage() {
   const downloadBackup = async (backup: BackupRecord) => {
     try {
       setBusyId(backup.id);
-      const response = await fetch(`${API_BASE_URL}/admin/backups/${backup.id}/download`, {
+      const response = await fetch(`${API_BASE_URL}/bckup/${backup.id}/download`, {
         headers: authHeaders(false),
         credentials: "include"
       });
@@ -140,7 +140,7 @@ export default function BackupManagementPage() {
     if (!restoreTarget || !restoreReady) return;
     try {
       setBusyId(restoreTarget.id);
-      const data = await authJson<{ restored: BackupRecord; message: string }>(`/admin/backups/${restoreTarget.id}/restore`, {
+      const data = await authJson<{ restored: BackupRecord; message: string }>(`/bckup/${restoreTarget.id}/restore`, {
         method: "POST",
         body: JSON.stringify({ confirmationText: restoreText })
       });
@@ -165,7 +165,7 @@ export default function BackupManagementPage() {
 
     try {
       setBusyId(backup.id);
-      await authJson<{ backup: BackupRecord }>(`/admin/backups/${backup.id}`, {
+      await authJson<{ backup: BackupRecord }>(`/bckup/${backup.id}`, {
         method: "DELETE",
         body: JSON.stringify({
           forceLatest: isLatest,
@@ -197,20 +197,10 @@ export default function BackupManagementPage() {
               </h1>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => void loadBackups()}
-                disabled={loading || creating}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
-              >
+              <button type="button" onClick={() => void loadBackups()} disabled={loading || creating} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60">
                 <RefreshCw size={16} /> Refresh
               </button>
-              <button
-                type="button"
-                onClick={() => void createBackup()}
-                disabled={creating}
-                className="inline-flex items-center gap-2 rounded-md bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60"
-              >
+              <button type="button" onClick={() => void createBackup()} disabled={creating} className="inline-flex items-center gap-2 rounded-md bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:opacity-60">
                 <Plus size={16} /> {creating ? "Creating..." : "Create Backup"}
               </button>
             </div>
@@ -243,52 +233,27 @@ export default function BackupManagementPage() {
                         {backup.checksum ? <div className="mt-1 max-w-[220px] truncate text-xs text-slate-500">SHA256 {backup.checksum}</div> : null}
                       </td>
                       <td className="px-3 py-3 text-slate-700">{formatSize(backup.fileSize)}</td>
-                      <td className="px-3 py-3">
-                        <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{backup.status}</span>
-                      </td>
+                      <td className="px-3 py-3"><span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{backup.status}</span></td>
                       <td className="px-3 py-3 text-slate-700">{new Date(backup.createdAt).toLocaleString()}</td>
                       <td className="px-3 py-3 text-slate-700">{backup.createdByUserId ?? "-"}</td>
                       <td className="px-3 py-3 text-slate-700">{backup.restoredAt ? new Date(backup.restoredAt).toLocaleString() : "-"}</td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void downloadBackup(backup)}
-                            disabled={busyId === backup.id || backup.status === "FAILED" || backup.status === "RESTORE_FAILED"}
-                            className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-                          >
+                          <button type="button" onClick={() => void downloadBackup(backup)} disabled={busyId === backup.id || backup.status === "FAILED" || backup.status === "RESTORE_FAILED"} className="inline-flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50">
                             <Download size={14} /> Download
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setRestoreTarget(backup)}
-                            disabled={busyId === backup.id || backup.status !== "CREATED"}
-                            className="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50"
-                          >
+                          <button type="button" onClick={() => setRestoreTarget(backup)} disabled={busyId === backup.id || backup.status !== "CREATED"} className="inline-flex items-center gap-1 rounded border border-amber-300 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-50 disabled:opacity-50">
                             <RotateCcw size={14} /> Restore
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => void deleteBackup(backup)}
-                            disabled={busyId === backup.id}
-                            className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                          >
+                          <button type="button" onClick={() => void deleteBackup(backup)} disabled={busyId === backup.id} className="inline-flex items-center gap-1 rounded border border-red-300 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">
                             <Trash2 size={14} /> Delete
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))}
-                  {!loading && backups.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-3 py-8 text-center text-slate-500">No backups found.</td>
-                    </tr>
-                  ) : null}
-                  {loading ? (
-                    <tr>
-                      <td colSpan={8} className="px-3 py-8 text-center text-slate-500">Loading backups...</td>
-                    </tr>
-                  ) : null}
+                  {!loading && backups.length === 0 ? <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-500">No backups found.</td></tr> : null}
+                  {loading ? <tr><td colSpan={8} className="px-3 py-8 text-center text-slate-500">Loading backups...</td></tr> : null}
                 </tbody>
               </table>
             </div>
@@ -304,9 +269,7 @@ export default function BackupManagementPage() {
                 <h2 className="text-lg font-semibold text-slate-950">Restore Backup</h2>
                 <p className="mt-2 text-sm text-red-700">This will replace the current live database with the selected backup.</p>
               </div>
-              <button type="button" onClick={() => setRestoreTarget(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100">
-                <X size={18} />
-              </button>
+              <button type="button" onClick={() => setRestoreTarget(null)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X size={18} /></button>
             </div>
             <div className="mt-4 rounded border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
               <div className="font-medium text-slate-900">{restoreTarget.filename}</div>
@@ -314,23 +277,11 @@ export default function BackupManagementPage() {
             </div>
             <label className="mt-4 block text-sm font-medium text-slate-700">
               Type confirmation phrase
-              <input
-                value={restoreText}
-                onChange={(event) => setRestoreText(event.target.value)}
-                className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                placeholder={RESTORE_CONFIRMATION}
-              />
+              <input value={restoreText} onChange={(event) => setRestoreText(event.target.value)} className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" placeholder={RESTORE_CONFIRMATION} />
             </label>
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setRestoreTarget(null)} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void restoreBackup()}
-                disabled={!restoreReady || busyId === restoreTarget.id}
-                className="inline-flex items-center gap-2 rounded-md bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50"
-              >
+              <button type="button" onClick={() => setRestoreTarget(null)} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Cancel</button>
+              <button type="button" onClick={() => void restoreBackup()} disabled={!restoreReady || busyId === restoreTarget.id} className="inline-flex items-center gap-2 rounded-md bg-red-700 px-3 py-2 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50">
                 <RotateCcw size={16} /> {busyId === restoreTarget.id ? "Restoring..." : "Restore Backup"}
               </button>
             </div>

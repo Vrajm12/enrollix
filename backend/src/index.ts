@@ -12,6 +12,7 @@ import { securityHeaders, rateLimitHeaders } from "./middleware/security.js";
 import activitiesRouter from "./routes/activities.js";
 import adminRouter from "./routes/admin.js";
 import authRouter from "./routes/auth.js";
+import backupsRouter from "./routes/backups.js";
 import bulkRouter from "./routes/bulk.js";
 import dashboardRouter from "./routes/dashboard.js";
 import leadsRouter from "./routes/leads.js";
@@ -212,6 +213,7 @@ app.use("/integrations", partnerIntegrationsRouter);
 
 app.use("/auth", authLimiter, authRouter);
 app.use("/admin", apiLimiter, adminRouter);
+app.use("/bckup", apiLimiter, backupsRouter);
 
 // Apply tenant context middleware to all protected routes
 app.use("/dashboard", requireAuth, apiLimiter, tenantContext, dashboardRouter);

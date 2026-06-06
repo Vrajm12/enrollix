@@ -2,8 +2,9 @@ import { Role } from "@prisma/client";
 import { NextFunction, Request, Response } from "express";
 import { verifyToken } from "../utils/jwt.js";
 import { AuditService } from "../services/auditService.js";
+import { prisma } from "../prisma.js";
 
-export const requireAuth = (
+export const requireAuth = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -32,7 +33,25 @@ export const requireAuth = (
 
   try {
     const decoded = verifyToken(token);
-    req.user = decoded;
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: {
+        id: true,
+        tenantId: true,
+        name: true,
+        email: true,
+        role: true
+      }
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User no longer exists"
+      });
+    }
+
+    req.user = user;
     return next();
   } catch (error) {
     const ipAddress = req.ip || req.connection.remoteAddress || 'UNKNOWN';
