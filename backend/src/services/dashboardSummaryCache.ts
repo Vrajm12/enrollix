@@ -4,26 +4,30 @@ type CachedSummary = {
 };
 
 const CACHE_TTL_MS = 30_000;
-const summaryCache = new Map<number, CachedSummary>();
+const summaryCache = new Map<string, CachedSummary>();
 
-export const getDashboardSummaryCache = <T>(tenantId: number): T | null => {
-  const cached = summaryCache.get(tenantId);
+export const getDashboardSummaryCache = <T>(cacheKey: string): T | null => {
+  const cached = summaryCache.get(cacheKey);
   if (!cached) return null;
   if (Date.now() > cached.expiresAt) {
-    summaryCache.delete(tenantId);
+    summaryCache.delete(cacheKey);
     return null;
   }
   return cached.value as T;
 };
 
-export const setDashboardSummaryCache = <T>(tenantId: number, value: T) => {
-  summaryCache.set(tenantId, {
+export const setDashboardSummaryCache = <T>(cacheKey: string, value: T) => {
+  summaryCache.set(cacheKey, {
     value,
     expiresAt: Date.now() + CACHE_TTL_MS
   });
 };
 
 export const invalidateDashboardSummaryCache = (tenantId: number) => {
-  summaryCache.delete(tenantId);
+  const prefix = `${tenantId}:`;
+  Array.from(summaryCache.keys()).forEach((key) => {
+    if (key.startsWith(prefix)) {
+      summaryCache.delete(key);
+    }
+  });
 };
-

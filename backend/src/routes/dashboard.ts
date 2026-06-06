@@ -19,11 +19,15 @@ const buildLeadAccessWhere = (req: Request) => {
   return tenantFilter;
 };
 
+const buildDashboardSummaryCacheKey = (req: Request) =>
+  `${req.user!.tenantId}:${req.user!.role}:${req.user!.id}`;
+
 router.get(
   "/summary",
   asyncHandler(async (req, res) => {
     const accessWhere = buildLeadAccessWhere(req);
     const tenantId = req.user!.tenantId;
+    const cacheKey = buildDashboardSummaryCacheKey(req);
     const cached = getDashboardSummaryCache<{
       totalLeads: number;
       enrolledCount: number;
@@ -34,7 +38,7 @@ router.get(
       closedThisWeek: number;
       statusCounts: Record<string, number>;
       priorityCounts: Record<string, number>;
-    }>(tenantId);
+    }>(cacheKey);
     if (cached) {
       return res.json(cached);
     }
@@ -82,7 +86,7 @@ router.get(
       priorityCounts
     };
 
-    setDashboardSummaryCache(tenantId, payload);
+    setDashboardSummaryCache(cacheKey, payload);
     return res.json(payload);
   })
 );

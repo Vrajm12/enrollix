@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { isMissingApiRequestLogTableError } from "../utils/prismaErrors.js";
+import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
 
 const router = Router();
 
@@ -579,6 +580,7 @@ router.post(
             assignedTo: assignee.id
           }
         });
+    invalidateDashboardSummaryCache(req.user.tenantId);
 
     return res.json({
       success: true,
