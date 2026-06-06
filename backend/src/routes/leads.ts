@@ -5,6 +5,11 @@ import { prisma } from "../prisma.js";
 import { validateResourceTenant, validateUserTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
+import {
+  AssignmentConfirmationError,
+  assertAssignmentConfirmed,
+  logLeadAssignmentChanges
+} from "../services/leadAssignmentService.js";
 
 const router = Router();
 
@@ -35,6 +40,7 @@ const leadBaseSchema = z.object({
   course: z.string().trim().optional().or(z.literal("")),
   source: z.string().trim().optional().or(z.literal("")),
   assignedTo: z.coerce.number().int().positive().optional().nullable(),
+  confirmReassignment: z.boolean().optional().default(false),
   status: z.nativeEnum(LeadStatus).optional(),
   priority: z.nativeEnum(Priority).optional(),
   nextFollowUp: z.string().datetime().optional().nullable()
@@ -434,31 +440,48 @@ router.post(
       }
     }
 
-    const created = await prisma.lead.create({
-      data: {
-        tenantId: req.user!.tenantId,
-        name: payload.name,
-        phone: payload.phone,
-        email: toNullable(payload.email),
-        address: toNullable(payload.address),
-        region: toNullable(payload.region),
-        city: toNullable(payload.city),
-        locality: toNullable(payload.locality),
-        pincode: toNullable(payload.pincode),
-        studentCasteCategory: toNullable(payload.studentCasteCategory),
-        parentContact: toNullable(payload.parentContact),
-        course: toNullable(payload.course),
-        source: toNullable(payload.source),
-        assignedTo,
-        status: payload.status ?? LeadStatus.LEAD,
-        priority: payload.priority ?? Priority.COLD,
-        nextFollowUp: payload.nextFollowUp ? new Date(payload.nextFollowUp) : null
-      },
-      include: {
-        assignedCounselor: {
-          select: { id: true, name: true, email: true }
+    const created = await prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.create({
+        data: {
+          tenantId: req.user!.tenantId,
+          name: payload.name,
+          phone: payload.phone,
+          email: toNullable(payload.email),
+          address: toNullable(payload.address),
+          region: toNullable(payload.region),
+          city: toNullable(payload.city),
+          locality: toNullable(payload.locality),
+          pincode: toNullable(payload.pincode),
+          studentCasteCategory: toNullable(payload.studentCasteCategory),
+          parentContact: toNullable(payload.parentContact),
+          course: toNullable(payload.course),
+          source: toNullable(payload.source),
+          assignedTo,
+          status: payload.status ?? LeadStatus.LEAD,
+          priority: payload.priority ?? Priority.COLD,
+          nextFollowUp: payload.nextFollowUp ? new Date(payload.nextFollowUp) : null
+        },
+        include: {
+          assignedCounselor: {
+            select: { id: true, name: true, email: true }
+          }
         }
+      });
+
+      if (assignedTo !== null) {
+        await logLeadAssignmentChanges(tx, [{
+          id: lead.id,
+          tenantId: lead.tenantId,
+          assignedTo: null
+        }], assignedTo, {
+          assignedBy: req.user!.id,
+          sourceModule: "leads.create",
+          ipAddress: req.ip ?? null,
+          userAgent: req.get("user-agent") ?? null
+        });
       }
+
+      return lead;
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 
@@ -504,7 +527,11 @@ router.put(
 
     const payload = parsed.data;
     const assignedTo =
-      req.user?.role === Role.COUNSELOR ? req.user.id : payload.assignedTo ?? null;
+      req.user?.role === Role.COUNSELOR
+        ? req.user.id
+        : payload.assignedTo !== undefined
+          ? payload.assignedTo
+          : existingLead.assignedTo;
 
     // Validate assigned user belongs to same tenant (if specified)
     if (assignedTo && assignedTo !== req.user?.id) {
@@ -517,31 +544,64 @@ router.put(
       }
     }
 
-    const updated = await prisma.lead.update({
-      where: { id: leadId },
-      data: {
-        name: payload.name,
-        phone: payload.phone,
-        email: toNullable(payload.email),
-        address: toNullable(payload.address),
-        region: toNullable(payload.region),
-        city: toNullable(payload.city),
-        locality: toNullable(payload.locality),
-        pincode: toNullable(payload.pincode),
-        studentCasteCategory: toNullable(payload.studentCasteCategory),
-        parentContact: toNullable(payload.parentContact),
-        course: toNullable(payload.course),
-        source: toNullable(payload.source),
-        status: payload.status ?? existingLead.status,
-        priority: payload.priority ?? existingLead.priority,
-        nextFollowUp: payload.nextFollowUp ? new Date(payload.nextFollowUp) : existingLead.nextFollowUp,
-        assignedTo
-      },
-      include: {
-        assignedCounselor: {
-          select: { id: true, name: true, email: true }
-        }
+    try {
+      assertAssignmentConfirmed([{
+        id: existingLead.id,
+        tenantId: existingLead.tenantId,
+        assignedTo: existingLead.assignedTo
+      }], assignedTo, payload.confirmReassignment);
+    } catch (error) {
+      if (error instanceof AssignmentConfirmationError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          requiresConfirmation: true,
+          conflictCount: error.conflicts.length,
+          conflicts: error.conflicts
+        });
       }
+      throw error;
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const lead = await tx.lead.update({
+        where: { id: leadId },
+        data: {
+          name: payload.name,
+          phone: payload.phone,
+          email: toNullable(payload.email),
+          address: toNullable(payload.address),
+          region: toNullable(payload.region),
+          city: toNullable(payload.city),
+          locality: toNullable(payload.locality),
+          pincode: toNullable(payload.pincode),
+          studentCasteCategory: toNullable(payload.studentCasteCategory),
+          parentContact: toNullable(payload.parentContact),
+          course: toNullable(payload.course),
+          source: toNullable(payload.source),
+          status: payload.status ?? existingLead.status,
+          priority: payload.priority ?? existingLead.priority,
+          nextFollowUp: payload.nextFollowUp ? new Date(payload.nextFollowUp) : existingLead.nextFollowUp,
+          assignedTo
+        },
+        include: {
+          assignedCounselor: {
+            select: { id: true, name: true, email: true }
+          }
+        }
+      });
+
+      await logLeadAssignmentChanges(tx, [{
+        id: existingLead.id,
+        tenantId: existingLead.tenantId,
+        assignedTo: existingLead.assignedTo
+      }], assignedTo, {
+        assignedBy: req.user!.id,
+        sourceModule: "leads.update",
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null
+      });
+
+      return lead;
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 

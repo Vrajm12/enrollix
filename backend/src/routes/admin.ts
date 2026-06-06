@@ -5,6 +5,10 @@ import { requireAuth, requireRole } from "../middleware/auth.js";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { isMissingApiRequestLogTableError } from "../utils/prismaErrors.js";
+import {
+  AssignmentConfirmationError,
+  restoreAssignmentsFromBatch
+} from "../services/leadAssignmentService.js";
 
 const router = Router();
 const courseOptionsSchema = z.array(z.string().trim().min(1).max(100)).max(200);
@@ -42,6 +46,16 @@ const monitoringQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional().default(100),
   tenantId: z.coerce.number().int().min(1).optional(),
   status: z.coerce.number().int().min(100).max(599).optional()
+});
+const assignmentHistoryQuerySchema = z.object({
+  tenantId: z.coerce.number().int().min(1),
+  userId: z.coerce.number().int().min(1),
+  mode: z.enum(["assignedTo", "assignedBy", "all"]).optional().default("all"),
+  limit: z.coerce.number().int().min(1).max(500).optional().default(100)
+});
+const restoreAssignmentBatchSchema = z.object({
+  apply: z.boolean().optional().default(false),
+  confirmReassignment: z.boolean().optional().default(false)
 });
 
 // Only SUPER_ADMIN can access these routes
@@ -585,6 +599,120 @@ router.get(
         tenantName: item.tenantId ? tenantMap.get(item.tenantId)?.name ?? "Unknown tenant" : "Unknown"
       }))
     });
+  })
+);
+
+router.get(
+  "/lead-assignments/history",
+  ...adminAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = assignmentHistoryQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid assignment history query params", errors: parsed.error.flatten() });
+    }
+
+    const { tenantId, userId, mode, limit } = parsed.data;
+    const user = await prisma.user.findFirst({
+      where: { id: userId, tenantId },
+      select: { id: true, name: true, email: true, role: true }
+    });
+    if (!user) {
+      return res.status(404).json({ message: "User not found in tenant" });
+    }
+
+    const involvementWhere =
+      mode === "assignedTo"
+        ? { OR: [{ oldAssignedTo: userId }, { newAssignedTo: userId }] }
+        : mode === "assignedBy"
+          ? { assignedBy: userId }
+          : { OR: [{ oldAssignedTo: userId }, { newAssignedTo: userId }, { assignedBy: userId }] };
+
+    const logs = await prisma.leadAssignmentLog.findMany({
+      where: {
+        tenantId,
+        ...involvementWhere
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit
+    });
+
+    const relatedUserIds = Array.from(
+      new Set(
+        logs
+          .flatMap((log) => [log.oldAssignedTo, log.newAssignedTo, log.assignedBy])
+          .filter((value): value is number => value !== null)
+      )
+    );
+    const relatedUsers = relatedUserIds.length
+      ? await prisma.user.findMany({
+          where: { tenantId, id: { in: relatedUserIds } },
+          select: { id: true, name: true, email: true, role: true }
+        })
+      : [];
+    const userMap = new Map(relatedUsers.map((item) => [item.id, item]));
+
+    const batchIds = Array.from(new Set(logs.map((log) => log.batchId).filter((value): value is string => value !== null)));
+    const batches = batchIds.length
+      ? await prisma.leadAssignmentBatch.findMany({
+          where: { tenantId, batchId: { in: batchIds } }
+        })
+      : [];
+    const batchMap = new Map(batches.map((batch) => [batch.batchId, batch]));
+
+    return res.json({
+      user,
+      mode,
+      logs: logs.map((log) => ({
+        ...log,
+        oldAssignee: log.oldAssignedTo ? userMap.get(log.oldAssignedTo) ?? null : null,
+        newAssignee: log.newAssignedTo ? userMap.get(log.newAssignedTo) ?? null : null,
+        assignedByUser: log.assignedBy ? userMap.get(log.assignedBy) ?? null : null,
+        batch: log.batchId ? batchMap.get(log.batchId) ?? null : null
+      }))
+    });
+  })
+);
+
+router.post(
+  "/lead-assignment-batches/:batchId/restore",
+  ...adminAuth,
+  asyncHandler(async (req, res) => {
+    const parsed = restoreAssignmentBatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid restore payload", errors: parsed.error.flatten() });
+    }
+
+    const batch = await prisma.leadAssignmentBatch.findUnique({
+      where: { batchId: req.params.batchId }
+    });
+    if (!batch) {
+      return res.status(404).json({ message: "Assignment batch not found" });
+    }
+
+    try {
+      const result = await restoreAssignmentsFromBatch({
+        tenantId: batch.tenantId,
+        batchId: batch.batchId,
+        assignedBy: req.user!.id,
+        confirmReassignment: parsed.data.confirmReassignment,
+        apply: parsed.data.apply,
+        sourceModule: "admin.lead-assignment-batches.restore",
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null
+      });
+
+      return res.json(result);
+    } catch (error) {
+      if (error instanceof AssignmentConfirmationError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          requiresConfirmation: true,
+          conflictCount: error.conflicts.length,
+          conflicts: error.conflicts.slice(0, 25)
+        });
+      }
+      throw error;
+    }
   })
 );
 

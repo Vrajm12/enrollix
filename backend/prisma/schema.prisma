@@ -134,6 +134,47 @@ model Lead {
   @@map("leads")
 }
 
+model LeadAssignmentLog {
+  id            String   @id @default(cuid())
+  leadId        Int      @map("lead_id")
+  tenantId      Int      @map("tenant_id")
+  oldAssignedTo Int?     @map("old_assigned_to")
+  newAssignedTo Int?     @map("new_assigned_to")
+  assignedBy    Int?     @map("assigned_by")
+  actionType    String   @map("action_type")
+  sourceModule  String   @map("source_module")
+  batchId       String?  @map("batch_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([oldAssignedTo])
+  @@index([newAssignedTo])
+  @@index([assignedBy])
+  @@index([batchId])
+  @@index([createdAt])
+  @@map("lead_assignment_logs")
+}
+
+model LeadAssignmentBatch {
+  batchId    String   @id @default(cuid()) @map("batch_id")
+  tenantId   Int      @map("tenant_id")
+  assignedBy Int?     @map("assigned_by")
+  assignedTo Int?     @map("assigned_to")
+  leadCount  Int      @map("lead_count")
+  pincode    String?
+  source     String?
+  startRange Int      @map("start_range")
+  endRange   Int      @map("end_range")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId])
+  @@index([assignedBy])
+  @@index([assignedTo])
+  @@index([createdAt])
+  @@map("lead_assignment_batches")
+}
+
 model IntegrationApiKey {
   id               Int      @id @default(autoincrement())
   tenantId         Int      @map("tenant_id")

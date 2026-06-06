@@ -9,6 +9,11 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { env } from "../config.js";
 import { resolveTenantSlugFromRequest } from "../utils/tenantSlug.js";
 import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
+import {
+  AssignmentConfirmationError,
+  assertAssignmentConfirmed,
+  logLeadAssignmentChanges
+} from "../services/leadAssignmentService.js";
 
 const router = Router();
 const MAX_UPLOAD_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB
@@ -61,6 +66,7 @@ const importChunkSchema = z.object({
 
 const bulkUpdateSchema = z.object({
   leadIds: z.array(z.number().int().positive()).min(1, "Select at least one lead"),
+  confirmReassignment: z.boolean().optional().default(false),
   updates: z
     .object({
       status: z.nativeEnum(LeadStatus).optional(),
@@ -881,8 +887,8 @@ router.post(
       for (const chunk of chunkArray(readyRows, DB_WRITE_CHUNK_SIZE)) {
         try {
           // eslint-disable-next-line no-await-in-loop
-          const result = await prisma.$transaction(async (tx) =>
-            tx.lead.createMany({
+          const createdLeads = await prisma.$transaction(async (tx) => {
+            const inserted = await tx.lead.createManyAndReturn({
               data: chunk.map((row) => ({
                 tenantId: req.user!.tenantId,
                 name: row.name,
@@ -902,10 +908,27 @@ router.post(
                 nextFollowUp: row.nextFollowUp ? new Date(row.nextFollowUp) : null,
                 assignedTo: req.user?.role === Role.COUNSELOR ? req.user.id : null
               })),
-              skipDuplicates: true
-            })
-          );
-          createdCount += result.count;
+              skipDuplicates: true,
+              select: { id: true, tenantId: true }
+            });
+
+            if (req.user?.role === Role.COUNSELOR && inserted.length > 0) {
+              await logLeadAssignmentChanges(
+                tx,
+                inserted.map((lead) => ({ ...lead, assignedTo: null })),
+                req.user.id,
+                {
+                  assignedBy: req.user.id,
+                  sourceModule: "bulk.import.csv",
+                  ipAddress: req.ip ?? null,
+                  userAgent: req.get("user-agent") ?? null
+                }
+              );
+            }
+
+            return inserted;
+          });
+          createdCount += createdLeads.length;
         } catch (error) {
           skipped.push({
             rowNumber: -1,
@@ -963,8 +986,8 @@ router.post(
     for (const chunk of chunkArray(rowsForInsert, DB_WRITE_CHUNK_SIZE)) {
       try {
         // eslint-disable-next-line no-await-in-loop
-        const result = await prisma.$transaction(async (tx) =>
-          tx.lead.createMany({
+        const createdLeads = await prisma.$transaction(async (tx) => {
+          const inserted = await tx.lead.createManyAndReturn({
             data: chunk.map(({ data: row }) => ({
               tenantId: req.user!.tenantId,
               name: row.name,
@@ -984,10 +1007,27 @@ router.post(
               nextFollowUp: row.nextFollowUp ? new Date(row.nextFollowUp) : null,
               assignedTo: req.user?.role === Role.COUNSELOR ? req.user.id : null
             })),
-            skipDuplicates: true
-          })
-        );
-        createdCount += result.count;
+            skipDuplicates: true,
+            select: { id: true, tenantId: true }
+          });
+
+          if (req.user?.role === Role.COUNSELOR && inserted.length > 0) {
+            await logLeadAssignmentChanges(
+              tx,
+              inserted.map((lead) => ({ ...lead, assignedTo: null })),
+              req.user.id,
+              {
+                assignedBy: req.user.id,
+                sourceModule: "bulk.import.csv.chunk",
+                ipAddress: req.ip ?? null,
+                userAgent: req.get("user-agent") ?? null
+              }
+            );
+          }
+
+          return inserted;
+        });
+        createdCount += createdLeads.length;
       } catch (error) {
         skipped.push({
           rowNumber: -1,
@@ -1019,12 +1059,12 @@ router.patch(
 
     // ✅ CRITICAL: Check if ANY of these leads belong to this tenant (early access check)
     const accessibleWhere = buildAccessibleLeadWhere(leadIds, req.user!);
-    const matchedLeadIds = await prisma.lead.findMany({
+    const matchedLeads = await prisma.lead.findMany({
       where: accessibleWhere,
-      select: { id: true }
+      select: { id: true, tenantId: true, assignedTo: true }
     });
 
-    if (matchedLeadIds.length === 0) {
+    if (matchedLeads.length === 0) {
       return res.status(404).json({ message: "No matching leads found" });
     }
 
@@ -1037,7 +1077,7 @@ router.patch(
       });
     }
 
-    const { updates } = parsed.data;
+    const { updates, confirmReassignment } = parsed.data;
 
     if (
       req.user?.role === Role.COUNSELOR &&
@@ -1052,34 +1092,84 @@ router.patch(
     if (updates.assignedTo !== undefined && updates.assignedTo !== null) {
       const assignee = await prisma.user.findUnique({
         where: { id: updates.assignedTo },
-        select: { id: true, role: true }
+        select: { id: true, tenantId: true, role: true }
       });
 
-      if (!assignee || (assignee.role !== Role.ADMIN && assignee.role !== Role.TENANT_ADMIN && assignee.role !== Role.COUNSELOR)) {
+      if (
+        !assignee ||
+        assignee.tenantId !== req.user!.tenantId ||
+        (assignee.role !== Role.ADMIN && assignee.role !== Role.TENANT_ADMIN && assignee.role !== Role.COUNSELOR)
+      ) {
         return res.status(403).json({ message: "Assigned user is invalid" });
       }
     }
 
-    const updateData = {
+    const nonAssignmentUpdateData = {
       ...(updates.status !== undefined ? { status: updates.status } : {}),
       ...(updates.priority !== undefined ? { priority: updates.priority } : {}),
-      ...(updates.assignedTo !== undefined ? { assignedTo: updates.assignedTo } : {}),
       ...(updates.nextFollowUp !== undefined
         ? { nextFollowUp: updates.nextFollowUp ? new Date(updates.nextFollowUp) : null }
         : {})
     };
 
-    const result = await prisma.lead.updateMany({
-      where: {
-        id: { in: matchedLeadIds.map((lead) => lead.id) }
-      },
-      data: updateData
+    if (updates.assignedTo !== undefined) {
+      try {
+        assertAssignmentConfirmed(matchedLeads, updates.assignedTo, confirmReassignment);
+      } catch (error) {
+        if (error instanceof AssignmentConfirmationError) {
+          return res.status(error.statusCode).json({
+            message: error.message,
+            requiresConfirmation: true,
+            conflictCount: error.conflicts.length,
+            conflicts: error.conflicts.slice(0, 25)
+          });
+        }
+        throw error;
+      }
+    }
+
+    const matchedLeadIds = matchedLeads.map((lead) => lead.id);
+    const result = await prisma.$transaction(async (tx) => {
+      const nonAssignmentKeys = Object.keys(nonAssignmentUpdateData);
+      const nonAssignmentResult = nonAssignmentKeys.length > 0
+        ? await tx.lead.updateMany({
+            where: {
+              id: { in: matchedLeadIds }
+            },
+            data: nonAssignmentUpdateData
+          })
+        : { count: matchedLeadIds.length };
+
+      if (updates.assignedTo !== undefined) {
+        await logLeadAssignmentChanges(tx, matchedLeads, updates.assignedTo, {
+          assignedBy: req.user!.id,
+          sourceModule: "bulk.leads.update",
+          ipAddress: req.ip ?? null,
+          userAgent: req.get("user-agent") ?? null
+        });
+
+        const changedLeadIds = matchedLeads
+          .filter((lead) => lead.assignedTo !== updates.assignedTo)
+          .map((lead) => lead.id);
+
+        if (changedLeadIds.length > 0) {
+          await tx.lead.updateMany({
+            where: {
+              tenantId: req.user!.tenantId,
+              id: { in: changedLeadIds }
+            },
+            data: { assignedTo: updates.assignedTo }
+          });
+        }
+      }
+
+      return nonAssignmentResult;
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 
     return res.json({
       message: `Updated ${result.count} lead${result.count === 1 ? "" : "s"}`,
-      updatedCount: result.count,
+      updatedCount: matchedLeadIds.length,
       requestedCount: leadIds.length,
       ignoredCount: leadIds.length - matchedLeadIds.length
     });

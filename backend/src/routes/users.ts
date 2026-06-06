@@ -5,7 +5,10 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { isMissingApiRequestLogTableError } from "../utils/prismaErrors.js";
-import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
+import {
+  assignLeadIdsWithHistory,
+  AssignmentConfirmationError
+} from "../services/leadAssignmentService.js";
 
 const router = Router();
 
@@ -23,7 +26,8 @@ const allocateLeadsSchema = z.object({
   startLeadNumber: z.number().int().positive(),
   endLeadNumber: z.number().int().positive(),
   pincode: z.string().trim().min(1).optional(),
-  source: z.string().trim().min(1).optional()
+  source: z.string().trim().min(1).optional(),
+  confirmReassignment: z.boolean().optional().default(false)
 })
   .refine((payload) => payload.endLeadNumber >= payload.startLeadNumber, {
     message: "endLeadNumber must be greater than or equal to startLeadNumber",
@@ -519,7 +523,7 @@ router.post(
       return res.status(400).json({ message: "Invalid allocation payload", errors: parsed.error.flatten() });
     }
 
-    const { userId, startLeadNumber, endLeadNumber, pincode, source } = parsed.data;
+    const { userId, startLeadNumber, endLeadNumber, pincode, source, confirmReassignment } = parsed.data;
 
     const assignee = await prisma.user.findFirst({
       where: {
@@ -569,23 +573,42 @@ router.post(
     });
 
     const targetLeadIds = targetLeads.map((lead) => lead.id);
-    const result = targetLeadIds.length === 0
-      ? { count: 0 }
-      : await prisma.lead.updateMany({
-          where: {
-            tenantId: req.user.tenantId,
-            id: { in: targetLeadIds }
-          },
-          data: {
-            assignedTo: assignee.id
-          }
+    let assignmentResult;
+    try {
+      assignmentResult = await assignLeadIdsWithHistory({
+        tenantId: req.user.tenantId,
+        leadIds: targetLeadIds,
+        newAssignedTo: assignee.id,
+        assignedBy: req.user.id,
+        sourceModule: "teams.allocate-leads",
+        confirmReassignment,
+        batch: {
+          pincode: pincode ?? null,
+          source: source ?? null,
+          startRange: startLeadNumber,
+          endRange: normalizedEnd
+        },
+        ipAddress: req.ip ?? null,
+        userAgent: req.get("user-agent") ?? null
+      });
+    } catch (error) {
+      if (error instanceof AssignmentConfirmationError) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          requiresConfirmation: true,
+          conflictCount: error.conflicts.length,
+          conflicts: error.conflicts.slice(0, 25)
         });
-    invalidateDashboardSummaryCache(req.user.tenantId);
+      }
+      throw error;
+    }
 
     return res.json({
       success: true,
-      message: `Allocated ${result.count} lead(s) to ${assignee.name}${scopeLabel ? ` for ${scopeLabel}` : ""}`,
-      allocatedCount: result.count,
+      message: `Allocated ${assignmentResult.updatedCount} lead(s) to ${assignee.name}${scopeLabel ? ` for ${scopeLabel}` : ""}`,
+      allocatedCount: assignmentResult.updatedCount,
+      loggedCount: assignmentResult.loggedCount,
+      batchId: assignmentResult.batchId,
       range: { startLeadNumber, endLeadNumber: normalizedEnd },
       pincode: pincode ?? null,
       source: source ?? null,
