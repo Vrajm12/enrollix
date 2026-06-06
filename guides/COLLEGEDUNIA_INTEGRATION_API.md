@@ -361,6 +361,7 @@ Response:
 ```text
 Computer Engineering
 AIML
+DSE - AIML
 Information Technology
 Electronics and Telecommunication Engineering
 

@@ -12,6 +12,18 @@ WITH normalized AS (
       SELECT
         CASE
           WHEN BTRIM(item.value) IN (
+            'DSE -AIDS',
+            'DSE - AIDS',
+            'DSE-AIDS',
+            'DSE- AIDS',
+            'DSE -AI&DS',
+            'DSE - AI&DS',
+            'DSE-AI&DS',
+            'DSE - Artificial Intelligence and Data Science',
+            'DSE - Artificial Intelligence & Data Science'
+          )
+          THEN 'DSE - AIML'
+          WHEN BTRIM(item.value) IN (
             'AIDS',
             'AI&DS',
             'AI & DS',
