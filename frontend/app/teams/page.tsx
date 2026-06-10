@@ -57,6 +57,7 @@ export default function TeamsPage() {
   const [allocationPincodes, setAllocationPincodes] = useState<string[]>([]);
   const [allocationSources, setAllocationSources] = useState<string[]>([]);
   const [availableLeadsForAllocation, setAvailableLeadsForAllocation] = useState<number | null>(null);
+  const [allocationHistory, setAllocationHistory] = useState<any[]>([]);
   const [loadingAllocationSummary, setLoadingAllocationSummary] = useState(false);
   const [allocationForm, setAllocationForm] = useState({
     userId: "",
@@ -177,6 +178,7 @@ export default function TeamsPage() {
       );
       setAllocationForm({ userId: "", pincode: "", source: "", startLeadNumber: "", endLeadNumber: "" });
       setAvailableLeadsForAllocation(null);
+      setAllocationHistory([]);
       await loadUsers(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to allocate leads");
@@ -192,6 +194,7 @@ export default function TeamsPage() {
 
     if (!allocationForm.pincode && !allocationForm.source) {
       setAvailableLeadsForAllocation(null);
+      setAllocationHistory([]);
       return;
     }
 
@@ -205,10 +208,12 @@ export default function TeamsPage() {
         });
         if (!ignore) {
           setAvailableLeadsForAllocation(result.availableLeads);
+          setAllocationHistory(result.recentAllocations || []);
         }
       } catch (err) {
         if (!ignore) {
           setAvailableLeadsForAllocation(null);
+          setAllocationHistory([]);
           setError(err instanceof Error ? err.message : "Unable to load lead availability");
         }
       } finally {
@@ -307,10 +312,29 @@ export default function TeamsPage() {
                   ))}
                 </select>
                 {allocationForm.pincode || allocationForm.source ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                    {loadingAllocationSummary
-                      ? "Loading leads available..."
-                      : `Available leads for selected filters: ${availableLeadsForAllocation ?? 0}`}
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-2 text-sm">
+                    {loadingAllocationSummary ? (
+                      <p className="text-slate-700">Loading leads available...</p>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-blue-900">
+                          Total Available Leads: <span className="text-lg">{availableLeadsForAllocation ?? 0}</span>
+                        </p>
+                        {allocationHistory && allocationHistory.length > 0 ? (
+                          <div className="mt-2 space-y-1 border-t border-blue-200 pt-2">
+                            <p className="text-xs font-semibold text-blue-700 uppercase">Recent Allocations (Last 2)</p>
+                            {allocationHistory.map((alloc, idx) => (
+                              <p key={idx} className="text-xs text-blue-800">
+                                • {alloc.startRange}-{alloc.endRange}: <span className="font-semibold">{alloc.assignedTo?.name || "Unassigned"}</span>
+                              </p>
+                            ))}
+                            <p className="text-xs text-blue-800 font-semibold pt-1">
+                              ➜ Next Available: {Math.max(...allocationHistory.map((a) => a.endRange), 0) + 1}-{availableLeadsForAllocation}
+                            </p>
+                          </div>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 ) : null}
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

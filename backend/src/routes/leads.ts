@@ -369,8 +369,12 @@ router.get(
       orderBy: { source: "asc" }
     });
 
+    const defaultSources = ["Meta Ads", "WhatsApp", "Instagram Ads", "Google Ads"];
+    const databaseSources = rows.map((row) => row.source).filter((value): value is string => Boolean(value));
+    const allSources = Array.from(new Set([...defaultSources, ...databaseSources])).sort();
+
     return res.json({
-      sources: rows.map((row) => row.source).filter((value): value is string => Boolean(value))
+      sources: allSources
     });
   })
 );

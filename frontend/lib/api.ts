@@ -500,7 +500,15 @@ export const api = {
     return request<{
       pincode: string | null;
       source: string | null;
+      totalLeads: number;
       availableLeads: number;
+      recentAllocations: Array<{
+        startRange: number;
+        endRange: number;
+        leadCount: number;
+        assignedTo: { id: number; name: string; email: string } | null;
+        createdAt: string;
+      }>;
     }>(`/users/team/allocate-leads/summary?${params.toString()}`);
   },
   getLeadAllocationPincodeSummary: (pincode: string) =>

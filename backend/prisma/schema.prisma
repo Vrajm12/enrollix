@@ -88,6 +88,7 @@ model User {
   password        String
   role            Role     @default(COUNSELOR)
   leadsAssigned   Lead[]   @relation("LeadAssignedTo")
+  assignmentBatches LeadAssignmentBatch[] @relation("LeadAssignmentBatchTo")
   whatsappMessages WhatsAppMessage[]
   smsMessages     SMSMessage[]
   reports         Report[]
@@ -169,6 +170,7 @@ model LeadAssignmentBatch {
   tenantId   Int      @map("tenant_id")
   assignedBy Int?     @map("assigned_by")
   assignedTo Int?     @map("assigned_to")
+  assignedToUser User? @relation("LeadAssignmentBatchTo", fields: [assignedTo], references: [id])
   leadCount  Int      @map("lead_count")
   pincode    String?
   source     String?

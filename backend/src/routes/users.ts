@@ -638,10 +638,44 @@ router.get(
       where: buildLeadAllocationWhere(req.user.tenantId, { pincode, source })
     });
 
+    // Get recent 2 allocations for this scope
+    const recentAllocations = await prisma.leadAssignmentBatch.findMany({
+      where: {
+        tenantId: req.user.tenantId,
+        pincode: pincode ?? null,
+        source: source ?? null
+      },
+      include: {
+        assignedToUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 2
+    });
+
     return res.json({
       pincode: pincode ?? null,
       source: source ?? null,
-      availableLeads: totalLeads
+      totalLeads,
+      availableLeads: totalLeads,
+      recentAllocations: recentAllocations.map((batch) => ({
+        startRange: batch.startRange,
+        endRange: batch.endRange,
+        leadCount: batch.leadCount,
+        assignedTo: batch.assignedToUser
+          ? {
+              id: batch.assignedToUser.id,
+              name: batch.assignedToUser.name,
+              email: batch.assignedToUser.email
+            }
+          : null,
+        createdAt: batch.createdAt
+      }))
     });
   })
 );
