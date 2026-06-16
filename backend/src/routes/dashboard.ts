@@ -3,6 +3,8 @@ import { Request, Router } from "express";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { getDashboardSummaryCache, setDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
+import { buildLeadSelect } from "../utils/leadCompatibility.js";
+import { logPrismaRouteError } from "../utils/prismaRouteLogger.js";
 
 const router = Router();
 
@@ -141,39 +143,51 @@ router.get(
       : scope === "all" ? allWhere
       : selectedDateWhere;
 
-    const [items, total, todayCount, missedCount, selectedCount, allCount] = await Promise.all([
-      prisma.lead.findMany({
-        where: activeWhere,
-        include: {
-          assignedCounselor: {
-            select: { id: true, name: true, email: true }
-          }
-        },
-        orderBy: { nextFollowUp: "asc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize
-      }),
-      prisma.lead.count({ where: activeWhere }),
-      prisma.lead.count({ where: todayWhere }),
-      prisma.lead.count({ where: missedWhere }),
-      prisma.lead.count({ where: selectedDateWhere }),
-      prisma.lead.count({ where: allWhere })
-    ]);
+    try {
+      const leadSelect = await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: false
+      });
 
-    return res.json({
-      items,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.max(Math.ceil(total / pageSize), 1),
-      counts: {
-        selectedDate: selectedCount,
-        today: todayCount,
-        missed: missedCount,
-        totalRecords: allCount
-      },
-      scope
-    });
+      const [items, total, todayCount, missedCount, selectedCount, allCount] = await Promise.all([
+        prisma.lead.findMany({
+          where: activeWhere,
+          select: leadSelect,
+          orderBy: { nextFollowUp: "asc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize
+        }),
+        prisma.lead.count({ where: activeWhere }),
+        prisma.lead.count({ where: todayWhere }),
+        prisma.lead.count({ where: missedWhere }),
+        prisma.lead.count({ where: selectedDateWhere }),
+        prisma.lead.count({ where: allWhere })
+      ]);
+
+      return res.json({
+        items,
+        total,
+        page,
+        pageSize,
+        totalPages: Math.max(Math.ceil(total / pageSize), 1),
+        counts: {
+          selectedDate: selectedCount,
+          today: todayCount,
+          missed: missedCount,
+          totalRecords: allCount
+        },
+        scope
+      });
+    } catch (error) {
+      logPrismaRouteError(req, "/dashboard/followups", error, {
+        date: dateParam || null,
+        scope,
+        page,
+        pageSize,
+        activeWhere
+      });
+      throw error;
+    }
   })
 );
 
@@ -191,13 +205,13 @@ router.get(
       nextFollowUp: { gte: today, lt: tomorrow }
     };
 
+    const leadSelect = await buildLeadSelect({
+      includeAssignedCounselor: true,
+      includeRemarks: false
+    });
     const followups = await prisma.lead.findMany({
       where,
-      include: {
-        assignedCounselor: {
-          select: { id: true, name: true, email: true }
-        }
-      },
+      select: leadSelect,
       orderBy: { createdAt: "asc" }
     });
 
@@ -217,13 +231,13 @@ router.get(
       nextFollowUp: { lt: today }
     };
 
+    const leadSelect = await buildLeadSelect({
+      includeAssignedCounselor: true,
+      includeRemarks: false
+    });
     const missed = await prisma.lead.findMany({
       where,
-      include: {
-        assignedCounselor: {
-          select: { id: true, name: true, email: true }
-        }
-      },
+      select: leadSelect,
       orderBy: { createdAt: "desc" }
     });
 
@@ -237,13 +251,13 @@ router.get(
   asyncHandler(async (req, res) => {
     const where = buildLeadAccessWhere(req);
 
+    const leadSelect = await buildLeadSelect({
+      includeAssignedCounselor: true,
+      includeRemarks: false
+    });
     const leads = await prisma.lead.findMany({
       where,
-      include: {
-        assignedCounselor: {
-          select: { id: true, name: true, email: true }
-        }
-      }
+      select: leadSelect
     });
 
     // Group by status

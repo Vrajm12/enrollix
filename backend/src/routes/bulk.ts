@@ -6,6 +6,7 @@ import csvParser from "csv-parser";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { buildLeadSelect } from "../utils/leadCompatibility.js";
 import { env } from "../config.js";
 import { resolveTenantSlugFromRequest } from "../utils/tenantSlug.js";
 import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
@@ -1241,11 +1242,10 @@ router.post(
 
     const leads = await prisma.lead.findMany({
       where,
-      include: {
-        assignedCounselor: {
-          select: { name: true }
-        }
-      },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: false
+      }),
       orderBy: { createdAt: "desc" }
     });
 

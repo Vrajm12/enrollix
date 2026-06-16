@@ -5,6 +5,7 @@ import { prisma } from "../prisma.js";
 import { validateResourceTenant, validateUserTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
+import { buildLeadSelect, hasLeadRemarksColumn } from "../utils/leadCompatibility.js";
 import {
   AssignmentConfirmationError,
   assertAssignmentConfirmed,
@@ -199,48 +200,26 @@ router.get(
         : where;
 
     if (!paginated) {
+      const leadSelect = await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: false
+      });
       const leads = await prisma.lead.findMany({
         where: statusWhere,
-        include: {
-          assignedCounselor: {
-            select: { id: true, name: true, email: true }
-          },
-          _count: {
-            select: { activities: true }
-          }
-        },
+        select: leadSelect,
         orderBy: { createdAt: "desc" }
       });
       return res.json(leads);
     }
 
+    const leadSelect = await buildLeadSelect({
+      includeAssignedCounselor: true,
+      includeRemarks: false
+    });
     const [items, total, groupedCounts] = await Promise.all([
       prisma.lead.findMany({
         where: statusWhere,
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          email: true,
-          address: true,
-          region: true,
-          city: true,
-          locality: true,
-          pincode: true,
-          studentCasteCategory: true,
-          parentContact: true,
-          course: true,
-          source: true,
-          status: true,
-          priority: true,
-          nextFollowUp: true,
-          assignedTo: true,
-          assignedCounselor: {
-            select: { id: true, name: true, email: true }
-          },
-          createdAt: true,
-          updatedAt: true
-        },
+        select: leadSelect,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         ...(validCursor
           ? {
@@ -391,11 +370,10 @@ router.get(
     // ✅ CRITICAL: Fetch lead first
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
-      include: {
-        assignedCounselor: {
-          select: { id: true, name: true, email: true }
-        }
-      }
+      select: await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: true
+      })
     });
 
     // ✅ CRITICAL: Check tenant access IMMEDIATELY (before any other logic)
@@ -433,6 +411,7 @@ router.post(
     const payload = parsed.data;
     const assignedTo =
       req.user?.role === Role.COUNSELOR ? req.user.id : payload.assignedTo ?? null;
+    const remarksSupported = await hasLeadRemarksColumn();
 
     // Validate assigned user belongs to same tenant (if specified)
     if (assignedTo && assignedTo !== req.user?.id) {
@@ -461,17 +440,16 @@ router.post(
           parentContact: toNullable(payload.parentContact),
           course: toNullable(payload.course),
           source: toNullable(payload.source),
-          remarks: toNullable(payload.remarks),
+          ...(remarksSupported ? { remarks: toNullable(payload.remarks) } : {}),
           assignedTo,
           status: payload.status ?? LeadStatus.LEAD,
           priority: payload.priority ?? Priority.COLD,
           nextFollowUp: payload.nextFollowUp ? new Date(payload.nextFollowUp) : null
         },
-        include: {
-          assignedCounselor: {
-            select: { id: true, name: true, email: true }
-          }
-        }
+        select: await buildLeadSelect({
+          includeAssignedCounselor: true,
+          includeRemarks: true
+        })
       });
 
       if (assignedTo !== null) {
@@ -504,7 +482,17 @@ router.put(
     }
 
     // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const existingLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        id: true,
+        tenantId: true,
+        assignedTo: true,
+        status: true,
+        priority: true,
+        nextFollowUp: true
+      }
+    });
     if (!existingLead) {
       return res.status(404).json({ message: "Lead not found" });
     }
@@ -538,6 +526,7 @@ router.put(
         : payload.assignedTo !== undefined
           ? payload.assignedTo
           : existingLead.assignedTo;
+    const remarksSupported = await hasLeadRemarksColumn();
 
     // Validate assigned user belongs to same tenant (if specified)
     if (assignedTo && assignedTo !== req.user?.id) {
@@ -584,17 +573,16 @@ router.put(
           parentContact: toNullable(payload.parentContact),
           course: toNullable(payload.course),
           source: toNullable(payload.source),
-          remarks: toNullable(payload.remarks),
+          ...(remarksSupported ? { remarks: toNullable(payload.remarks) } : {}),
           status: payload.status ?? existingLead.status,
           priority: payload.priority ?? existingLead.priority,
           nextFollowUp: payload.nextFollowUp ? new Date(payload.nextFollowUp) : existingLead.nextFollowUp,
           assignedTo
         },
-        include: {
-          assignedCounselor: {
-            select: { id: true, name: true, email: true }
-          }
-        }
+        select: await buildLeadSelect({
+          includeAssignedCounselor: true,
+          includeRemarks: true
+        })
       });
 
       await logLeadAssignmentChanges(tx, [{
@@ -625,7 +613,17 @@ router.patch(
     }
 
     // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const existingLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        id: true,
+        tenantId: true,
+        assignedTo: true,
+        status: true,
+        priority: true,
+        nextFollowUp: true
+      }
+    });
     if (!existingLead) {
       return res.status(404).json({ message: "Lead not found" });
     }
@@ -654,7 +652,11 @@ router.patch(
 
     const updated = await prisma.lead.update({
       where: { id: leadId },
-      data: { status: parsed.data.status }
+      data: { status: parsed.data.status },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: true
+      })
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 
@@ -671,7 +673,17 @@ router.patch(
     }
 
     // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const existingLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        id: true,
+        tenantId: true,
+        assignedTo: true,
+        status: true,
+        priority: true,
+        nextFollowUp: true
+      }
+    });
     if (!existingLead) {
       return res.status(404).json({ message: "Lead not found" });
     }
@@ -700,7 +712,11 @@ router.patch(
 
     const updated = await prisma.lead.update({
       where: { id: leadId },
-      data: { priority: parsed.data.priority }
+      data: { priority: parsed.data.priority },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: true
+      })
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 
@@ -717,7 +733,17 @@ router.patch(
     }
 
     // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const existingLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        id: true,
+        tenantId: true,
+        assignedTo: true,
+        status: true,
+        priority: true,
+        nextFollowUp: true
+      }
+    });
     if (!existingLead) {
       return res.status(404).json({ message: "Lead not found" });
     }
@@ -746,7 +772,11 @@ router.patch(
 
     const updated = await prisma.lead.update({
       where: { id: leadId },
-      data: { nextFollowUp: new Date(parsed.data.nextFollowUp) }
+      data: { nextFollowUp: new Date(parsed.data.nextFollowUp) },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: true
+      })
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 
@@ -763,7 +793,17 @@ router.patch(
     }
 
     // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const existingLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        id: true,
+        tenantId: true,
+        assignedTo: true,
+        status: true,
+        priority: true,
+        nextFollowUp: true
+      }
+    });
     if (!existingLead) {
       return res.status(404).json({ message: "Lead not found" });
     }
@@ -783,7 +823,11 @@ router.patch(
 
     const updated = await prisma.lead.update({
       where: { id: leadId },
-      data: { nextFollowUp: null }
+      data: { nextFollowUp: null },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: true
+      })
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 
@@ -800,7 +844,17 @@ router.delete(
     }
 
     // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
-    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const existingLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        id: true,
+        tenantId: true,
+        assignedTo: true,
+        status: true,
+        priority: true,
+        nextFollowUp: true
+      }
+    });
     if (!existingLead) {
       return res.status(404).json({ message: "Lead not found" });
     }
@@ -820,7 +874,11 @@ router.delete(
 
     const updated = await prisma.lead.update({
       where: { id: leadId },
-      data: { nextFollowUp: null }
+      data: { nextFollowUp: null },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: true,
+        includeRemarks: true
+      })
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 

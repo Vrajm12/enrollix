@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { validateResourceTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { buildLeadSelect } from "../utils/leadCompatibility.js";
 
 const router = Router();
 
@@ -34,7 +35,10 @@ router.post(
     }
 
     // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating other payload fields
-    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: await buildLeadSelect({ includeAssignedCounselor: false, includeRemarks: false })
+    });
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }
@@ -84,7 +88,10 @@ router.get(
     }
 
     // ✅ CRITICAL: Fetch lead and check tenant IMMEDIATELY (before returning activity data)
-    const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: await buildLeadSelect({ includeAssignedCounselor: false, includeRemarks: false })
+    });
     if (!lead) {
       return res.status(404).json({ message: "Lead not found" });
     }

@@ -5,6 +5,7 @@ import twilio from "twilio";
 import { prisma } from "../prisma.js";
 import { validateResourceTenant } from "../utils/tenantHelper.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
+import { buildLeadSelect } from "../utils/leadCompatibility.js";
 import { env } from "../config.js";
 import { twilioService } from "../services/twilio.js";
 import { emailService } from "../services/email.js";
@@ -54,7 +55,11 @@ router.post(
     }
 
     const lead = await prisma.lead.findUnique({
-      where: { id: parsed.data.leadId }
+      where: { id: parsed.data.leadId },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: false,
+        includeRemarks: false
+      })
     });
 
     if (!lead) {
@@ -105,7 +110,11 @@ router.get(
     }
 
     const lead = await prisma.lead.findUnique({
-      where: { id: leadId }
+      where: { id: leadId },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: false,
+        includeRemarks: false
+      })
     });
 
     if (!lead) {
@@ -142,7 +151,11 @@ router.post(
     }
 
     const lead = await prisma.lead.findUnique({
-      where: { id: parsed.data.leadId }
+      where: { id: parsed.data.leadId },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: false,
+        includeRemarks: false
+      })
     });
 
     if (!lead) {
@@ -217,7 +230,11 @@ router.get(
     }
 
     const lead = await prisma.lead.findUnique({
-      where: { id: leadId }
+      where: { id: leadId },
+      select: await buildLeadSelect({
+        includeAssignedCounselor: false,
+        includeRemarks: false
+      })
     });
 
     if (!lead) {
@@ -253,11 +270,16 @@ router.post(
     }
 
     // Fetch all leads
+    const leadSelect = await buildLeadSelect({
+      includeAssignedCounselor: false,
+      includeRemarks: false
+    });
     const leads = await prisma.lead.findMany({
       where: {
         tenantId: req.user!.tenantId,
         id: { in: parsed.data.leadIds }
-      }
+      },
+      select: leadSelect
     });
 
     if (leads.length === 0) {

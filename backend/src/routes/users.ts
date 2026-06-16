@@ -645,18 +645,36 @@ router.get(
         pincode: pincode ?? null,
         source: source ?? null
       },
-      include: {
-        assignedToUser: {
+      select: {
+        batchId: true,
+        startRange: true,
+        endRange: true,
+        leadCount: true,
+        assignedTo: true,
+        createdAt: true
+      },
+      orderBy: { createdAt: "desc" },
+      take: 2
+    });
+
+    const assignedToIds = Array.from(
+      new Set(
+        recentAllocations
+          .map((batch) => batch.assignedTo)
+          .filter((value): value is number => value !== null)
+      )
+    );
+    const assignedUsers = assignedToIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: assignedToIds } },
           select: {
             id: true,
             name: true,
             email: true
           }
-        }
-      },
-      orderBy: { createdAt: "desc" },
-      take: 2
-    });
+        })
+      : [];
+    const assignedUserMap = new Map(assignedUsers.map((user) => [user.id, user]));
 
     return res.json({
       pincode: pincode ?? null,
@@ -667,11 +685,11 @@ router.get(
         startRange: batch.startRange,
         endRange: batch.endRange,
         leadCount: batch.leadCount,
-        assignedTo: batch.assignedToUser
+        assignedTo: batch.assignedTo
           ? {
-              id: batch.assignedToUser.id,
-              name: batch.assignedToUser.name,
-              email: batch.assignedToUser.email
+              id: assignedUserMap.get(batch.assignedTo)?.id ?? batch.assignedTo,
+              name: assignedUserMap.get(batch.assignedTo)?.name ?? "Unknown",
+              email: assignedUserMap.get(batch.assignedTo)?.email ?? ""
             }
           : null,
         createdAt: batch.createdAt
