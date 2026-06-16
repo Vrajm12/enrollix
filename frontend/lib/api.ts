@@ -209,6 +209,14 @@ export const api = {
       method: "PATCH",
       body: { nextFollowUp },
     }),
+  completeLeadFollowup: (id: number) =>
+    request<Lead>(`/leads/${id}/followup/complete`, {
+      method: "PATCH",
+    }),
+  deleteLeadFollowup: (id: number) =>
+    request<Lead>(`/leads/${id}/followup`, {
+      method: "DELETE",
+    }),
   deleteLeadsBulk: (leadIds: number[]) =>
     (async () => {
       try {

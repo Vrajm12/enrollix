@@ -55,7 +55,8 @@ export default function LeadDetailPage() {
     region: "",
     city: "",
     locality: "",
-    parentContact: ""
+    parentContact: "",
+    remarks: ""
   });
   const [activityForm, setActivityForm] = useState<{
     type: ActivityType;
@@ -108,7 +109,8 @@ export default function LeadDetailPage() {
         region: leadResponse.region ?? "",
         city: leadResponse.city ?? "",
         locality: leadResponse.locality ?? "",
-        parentContact: leadResponse.parentContact ?? ""
+        parentContact: leadResponse.parentContact ?? "",
+        remarks: (leadResponse as any).remarks ?? ""
       });
       if (leadResponse.nextFollowUp) {
         const date = new Date(leadResponse.nextFollowUp);
@@ -237,6 +239,7 @@ export default function LeadDetailPage() {
         city: leadForm.city.trim(),
         locality: leadForm.locality.trim(),
         parentContact: leadForm.parentContact.trim(),
+        remarks: leadForm.remarks.trim(),
         status: lead.status,
         priority: lead.priority,
         assignedTo: lead.assignedTo,
@@ -255,7 +258,8 @@ export default function LeadDetailPage() {
         region: updated.region ?? "",
         city: updated.city ?? "",
         locality: updated.locality ?? "",
-        parentContact: updated.parentContact ?? ""
+        parentContact: updated.parentContact ?? "",
+        remarks: (updated as any).remarks ?? ""
       });
       setError(null);
     } catch (err) {
@@ -529,6 +533,12 @@ export default function LeadDetailPage() {
                 onChange={(e) => setLeadForm((current) => ({ ...current, parentContact: e.target.value }))}
                 placeholder="Parent contact"
                 className="col-span-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 md:col-span-2"
+              />
+              <textarea
+                value={leadForm.remarks}
+                onChange={(e) => setLeadForm((current) => ({ ...current, remarks: e.target.value }))}
+                placeholder="Special remarks (e.g., interested in weekend batch, prefers evening calls)"
+                className="col-span-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 md:col-span-2 h-24 resize-none"
               />
             </div>
             <div className="mt-4 flex justify-end">

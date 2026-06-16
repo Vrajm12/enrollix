@@ -42,6 +42,7 @@ export function AddLeadModal({
     locality: string;
     parentName: string;
     parentPhone: string;
+    remarks: string;
   }>({
     name: '',
     email: '',
@@ -55,6 +56,7 @@ export function AddLeadModal({
     locality: '',
     parentName: '',
     parentPhone: '',
+    remarks: '',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -73,6 +75,7 @@ export function AddLeadModal({
       locality: '',
       parentName: '',
       parentPhone: '',
+      remarks: '',
     });
     onOpenChange(false);
   };
@@ -301,6 +304,21 @@ export function AddLeadModal({
                 disabled={isLoading}
               />
             </div>
+          </div>
+
+          {/* Divider */}
+          <div className="border-t border-slate-200 my-4" />
+
+          {/* Remarks */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-900">Additional Notes</h3>
+            <textarea
+              placeholder="Special remarks (e.g., interested in weekend batch, prefers evening calls)"
+              value={formData.remarks}
+              onChange={(e) => setFormData({...formData, remarks: e.target.value})}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 h-20 resize-none"
+              disabled={isLoading}
+            />
           </div>
 
           {/* Actions */}

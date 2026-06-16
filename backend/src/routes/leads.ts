@@ -39,6 +39,7 @@ const leadBaseSchema = z.object({
   parentContact: z.string().trim().optional().or(z.literal("")),
   course: z.string().trim().optional().or(z.literal("")),
   source: z.string().trim().optional().or(z.literal("")),
+  remarks: z.string().trim().optional().or(z.literal("")),
   assignedTo: z.coerce.number().int().positive().optional().nullable(),
   confirmReassignment: z.boolean().optional().default(false),
   status: z.nativeEnum(LeadStatus).optional(),
@@ -460,6 +461,7 @@ router.post(
           parentContact: toNullable(payload.parentContact),
           course: toNullable(payload.course),
           source: toNullable(payload.source),
+          remarks: toNullable(payload.remarks),
           assignedTo,
           status: payload.status ?? LeadStatus.LEAD,
           priority: payload.priority ?? Priority.COLD,
@@ -582,6 +584,7 @@ router.put(
           parentContact: toNullable(payload.parentContact),
           course: toNullable(payload.course),
           source: toNullable(payload.source),
+          remarks: toNullable(payload.remarks),
           status: payload.status ?? existingLead.status,
           priority: payload.priority ?? existingLead.priority,
           nextFollowUp: payload.nextFollowUp ? new Date(payload.nextFollowUp) : existingLead.nextFollowUp,
@@ -744,6 +747,80 @@ router.patch(
     const updated = await prisma.lead.update({
       where: { id: leadId },
       data: { nextFollowUp: new Date(parsed.data.nextFollowUp) }
+    });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
+
+    return res.json(updated);
+  })
+);
+
+router.patch(
+  "/:id/followup/complete",
+  asyncHandler(async (req, res) => {
+    const leadId = parseLeadId(req.params.id);
+    if (!leadId) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
+    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!existingLead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Check tenant access IMMEDIATELY (before payload validation)
+    if (!validateResourceTenant(req.user!.tenantId, existingLead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (
+      req.user?.role !== Role.TENANT_ADMIN &&
+      req.user?.role !== Role.SUPER_ADMIN &&
+      existingLead.assignedTo !== req.user?.id
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const updated = await prisma.lead.update({
+      where: { id: leadId },
+      data: { nextFollowUp: null }
+    });
+    invalidateDashboardSummaryCache(req.user!.tenantId);
+
+    return res.json(updated);
+  })
+);
+
+router.delete(
+  "/:id/followup",
+  asyncHandler(async (req, res) => {
+    const leadId = parseLeadId(req.params.id);
+    if (!leadId) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Fetch lead and check tenant BEFORE validating payload
+    const existingLead = await prisma.lead.findUnique({ where: { id: leadId } });
+    if (!existingLead) {
+      return res.status(404).json({ message: "Lead not found" });
+    }
+
+    // ✅ CRITICAL: Check tenant access IMMEDIATELY (before payload validation)
+    if (!validateResourceTenant(req.user!.tenantId, existingLead.tenantId, req.user?.role)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (
+      req.user?.role !== Role.TENANT_ADMIN &&
+      req.user?.role !== Role.SUPER_ADMIN &&
+      existingLead.assignedTo !== req.user?.id
+    ) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const updated = await prisma.lead.update({
+      where: { id: leadId },
+      data: { nextFollowUp: null }
     });
     invalidateDashboardSummaryCache(req.user!.tenantId);
 

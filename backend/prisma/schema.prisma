@@ -119,6 +119,7 @@ model Lead {
   campaign         String?
   medium           String?
   partnerSource    String?     @map("partner_source")
+  remarks          String?     @db.Text
   status           LeadStatus  @default(LEAD)
   priority         Priority    @default(COLD)
   nextFollowUp     DateTime?   @map("next_follow_up")

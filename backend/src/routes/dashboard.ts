@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { Role, LeadStatus } from "@prisma/client";
 import { Request, Router } from "express";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -127,7 +127,8 @@ router.get(
     };
     const missedWhere = {
       ...accessWhere,
-      nextFollowUp: { lt: today }
+      nextFollowUp: { lt: today },
+      status: { not: LeadStatus.INTERESTED }
     };
     const allWhere = {
       ...accessWhere,

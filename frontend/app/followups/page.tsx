@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Calendar, Clock, Mail, MessageCircle, Phone, Users } from 'lucide-react';
+import { Calendar, Clock, Mail, MessageCircle, Phone, Users, Check, Trash2, Edit, X, AlertCircle } from 'lucide-react';
 import Sidebar from '@/components/Sidebar';
 import { ApiError, api } from '@/lib/api';
 import { clearSession, hasSession } from '@/lib/auth';
@@ -40,6 +40,10 @@ export default function FollowupsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [counts, setCounts] = useState({ selectedDate: 0, today: 0, missed: 0, totalRecords: 0 });
   const [refreshTick, setRefreshTick] = useState(0);
+  const [actioningIds, setActioningIds] = useState<Set<number>>(new Set());
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDate, setEditDate] = useState('');
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasSession()) {
@@ -90,6 +94,64 @@ export default function FollowupsPage() {
 
     void loadFollowups();
   }, [page, refreshTick, router, scope, selectedDate]);
+
+  const handleCompleteFollowup = async (leadId: number) => {
+    try {
+      setActioningIds((prev) => new Set(prev).add(leadId));
+      await api.completeLeadFollowup(leadId);
+      setFollowups((prev) => prev.filter((lead) => lead.id !== leadId));
+      setRefreshTick((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to complete follow-up');
+    } finally {
+      setActioningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(leadId);
+        return next;
+      });
+    }
+  };
+
+  const handleDeleteFollowup = async (leadId: number) => {
+    if (!confirm('Are you sure you want to delete this follow-up?')) return;
+    try {
+      setActioningIds((prev) => new Set(prev).add(leadId));
+      await api.deleteLeadFollowup(leadId);
+      setFollowups((prev) => prev.filter((lead) => lead.id !== leadId));
+      setRefreshTick((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete follow-up');
+    } finally {
+      setActioningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(leadId);
+        return next;
+      });
+    }
+  };
+
+  const handleUpdateFollowup = async (leadId: number) => {
+    if (!editDate) {
+      setEditError('Please select a date');
+      return;
+    }
+    try {
+      setActioningIds((prev) => new Set(prev).add(leadId));
+      await api.updateLeadFollowup(leadId, new Date(editDate).toISOString());
+      setEditingId(null);
+      setEditDate('');
+      setEditError(null);
+      setRefreshTick((value) => value + 1);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Failed to update follow-up');
+    } finally {
+      setActioningIds((prev) => {
+        const next = new Set(prev);
+        next.delete(leadId);
+        return next;
+      });
+    }
+  };
 
   const selectedLabel = useMemo(() => {
     if (!selectedDate) return '';
@@ -200,14 +262,102 @@ export default function FollowupsPage() {
                           </button>
                         )}
                       </div>
-                      <div>
-                        <Link href={`/leads/${lead.id}`} className="rounded-lg bg-blue-100 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-200">View</Link>
+                      <div className="flex gap-2 items-center">
+                        <button
+                          type="button"
+                          onClick={() => handleCompleteFollowup(lead.id)}
+                          disabled={actioningIds.has(lead.id)}
+                          className="rounded-lg bg-green-100 p-2 text-green-600 hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                          title="Mark as complete"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingId(lead.id);
+                            setEditDate(lead.nextFollowUp ? new Date(lead.nextFollowUp).toISOString().split('T')[0] : '');
+                            setEditError(null);
+                          }}
+                          disabled={actioningIds.has(lead.id)}
+                          className="rounded-lg bg-blue-100 p-2 text-blue-600 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                          title="Edit date"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteFollowup(lead.id)}
+                          disabled={actioningIds.has(lead.id)}
+                          className="rounded-lg bg-red-100 p-2 text-red-600 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                          title="Delete follow-up"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </div>
                   ))
                 )}
               </div>
             </div>
+
+            {/* Edit Follow-up Modal */}
+            {editingId && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-slate-900">Update Follow-up Date</h3>
+                    <button
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditDate('');
+                        setEditError(null);
+                      }}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                  {editError && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2 text-sm text-red-700">
+                      <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                      <span>{editError}</span>
+                    </div>
+                  )}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">New Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={editDate}
+                      onChange={(e) => {
+                        setEditDate(e.target.value);
+                        setEditError(null);
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditDate('');
+                        setEditError(null);
+                      }}
+                      className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleUpdateFollowup(editingId)}
+                      disabled={actioningIds.has(editingId)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Update
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
