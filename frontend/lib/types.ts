@@ -36,6 +36,7 @@ export interface Lead {
   parentContact: string | null;
   course: string | null;
   source: string | null;
+  remarks: string | null;
   status: LeadStatus;
   priority: Priority;
   nextFollowUp: string | null;
