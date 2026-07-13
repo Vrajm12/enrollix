@@ -12,6 +12,12 @@ const reservedSubdomains = new Set([
 
 const normalizeHost = (rawHost: string) => rawHost.toLowerCase().split(":")[0].trim();
 
+const splitRootDomains = (rootDomain: string) =>
+  rootDomain
+    .split(",")
+    .map((domain) => domain.trim().toLowerCase())
+    .filter(Boolean);
+
 const isValidSlug = (slug: string) => /^[a-z0-9-]+$/.test(slug) && !reservedSubdomains.has(slug);
 
 const readHostnameFromOrigin = (origin: string | undefined) => {
@@ -27,12 +33,13 @@ const readHostnameFromOrigin = (origin: string | undefined) => {
 const slugFromHost = (host: string, rootDomain: string) => {
   if (!host) return null;
   const normalizedHost = normalizeHost(host);
-  const normalizedRoot = rootDomain.toLowerCase().trim();
 
-  if (normalizedHost.endsWith(`.${normalizedRoot}`)) {
-    const left = normalizedHost.slice(0, -(`.${normalizedRoot}`.length));
-    const slug = left.split(".")[0];
-    return slug && isValidSlug(slug) ? slug : null;
+  for (const normalizedRoot of splitRootDomains(rootDomain)) {
+    if (normalizedHost.endsWith(`.${normalizedRoot}`)) {
+      const left = normalizedHost.slice(0, -(`.${normalizedRoot}`.length));
+      const slug = left.split(".")[0];
+      if (slug && isValidSlug(slug)) return slug;
+    }
   }
 
   if (normalizedHost.endsWith(".localhost")) {

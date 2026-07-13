@@ -24,14 +24,21 @@ import usersRouter from "./routes/users.js";
 
 const app = express();
 
-const allowedOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim());
+const splitCsv = (value: string) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const allowedOrigins = splitCsv(env.CORS_ORIGIN);
+const rootDomains = splitCsv(env.ROOT_DOMAIN);
 const allowSubdomainOrigins = env.ALLOW_SUBDOMAIN_ORIGINS;
 const isDevelopment = (process.env.NODE_ENV ?? "development") !== "production";
 
 const normalizeOrigin = (origin: string) => origin.trim().replace(/\/$/, "");
 const normalizedAllowedOrigins = allowedOrigins.map(normalizeOrigin);
 const allowedRootHosts = new Set(
-  [env.ROOT_DOMAIN, ...normalizedAllowedOrigins]
+  [...rootDomains, ...normalizedAllowedOrigins]
     .map((value) => {
       const normalizedValue = value.trim().replace(/\/$/, "");
       if (!normalizedValue) return null;

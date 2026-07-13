@@ -8,7 +8,7 @@ const envSchema = z.object({
   JWT_EXPIRES_IN: z.string().default("7d"),
   PORT: z.coerce.number().default(4000),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
-  ROOT_DOMAIN: z.string().default("guruverse.com"),
+  ROOT_DOMAIN: z.string().default("guruverse.co.in,guruverse.com"),
   ALLOW_SUBDOMAIN_ORIGINS: z
     .enum(["true", "false"])
     .default("true")
