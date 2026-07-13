@@ -361,9 +361,20 @@ router.post(
 
       if (validEmailLeads.length > maxRecipients) {
         return res.status(400).json({
-          message: `Email bulk limit exceeded. Selected ${validEmailLeads.length} valid email leads, but current local cap is ${maxRecipients}.`,
+          message: `Email bulk limit exceeded. Selected ${validEmailLeads.length} valid email leads, but current server cap is ${maxRecipients}.`,
           maxRecipients
         });
+      }
+
+      if (!dryRun && validEmailLeads.length > 0) {
+        try {
+          await emailService.verifyConnection();
+        } catch (error) {
+          return res.status(400).json({
+            message: "SMTP connection failed. Check Brevo SMTP key, authorized IP, and sender verification.",
+            error: error instanceof Error ? error.message : "Unknown SMTP connection error"
+          });
+        }
       }
 
       for (let index = 0; index < validEmailLeads.length; index += 1) {

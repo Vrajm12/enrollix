@@ -17,6 +17,9 @@ const getTransporter = () => {
       host: env.SMTP_HOST,
       port: env.SMTP_PORT,
       secure: env.SMTP_SECURE,
+      connectionTimeout: env.SMTP_CONNECTION_TIMEOUT_MS,
+      greetingTimeout: env.SMTP_CONNECTION_TIMEOUT_MS,
+      socketTimeout: env.SMTP_SOCKET_TIMEOUT_MS,
       auth: {
         user: env.SMTP_USER,
         pass: env.SMTP_PASS
@@ -64,6 +67,11 @@ const renderLeadTemplate = (params: { subject: string; message: string; lead: Le
   return { subject, text, html };
 };
 
+const verifyConnection = async () => {
+  const client = getTransporter();
+  await client.verify();
+};
+
 const sendLeadEmail = async (params: {
   to: string;
   subject: string;
@@ -92,6 +100,7 @@ const sendLeadEmail = async (params: {
 
 export const emailService = {
   isConfigured,
+  verifyConnection,
   sendLeadEmail,
   renderLeadTemplate
 };

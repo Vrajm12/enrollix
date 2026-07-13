@@ -34,6 +34,8 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
+  SMTP_CONNECTION_TIMEOUT_MS: z.coerce.number().default(10000),
+  SMTP_SOCKET_TIMEOUT_MS: z.coerce.number().default(20000),
   // Local safety rails for bulk email sending
   EMAIL_BULK_MAX_RECIPIENTS: z.coerce.number().default(200),
   EMAIL_BULK_DELAY_MS: z.coerce.number().default(250)
