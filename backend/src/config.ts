@@ -3,6 +3,8 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  DATABASE_CONNECTION_LIMIT: z.coerce.number().default(20),
+  DATABASE_POOL_TIMEOUT: z.coerce.number().default(30),
   BACKUP_DIR: z.string().min(1).default("/var/backups/guruverse"),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRES_IN: z.string().default("7d"),

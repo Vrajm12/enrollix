@@ -18,5 +18,10 @@ export const errorHandler = (
       message: "Uploaded payload is too large. Maximum allowed size is 50 MB."
     });
   }
+  if (payloadError?.type === "entity.parse.failed") {
+    return res.status(400).json({
+      message: "Invalid JSON payload."
+    });
+  }
   res.status(500).json({ message: "Internal server error" });
 };

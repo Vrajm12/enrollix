@@ -370,6 +370,7 @@ router.post(
         try {
           await emailService.verifyConnection();
         } catch (error) {
+          console.error("SMTP verification failed before bulk email send:", error);
           return res.status(400).json({
             message: "SMTP connection failed. Check Brevo SMTP key, authorized IP, and sender verification.",
             error: error instanceof Error ? error.message : "Unknown SMTP connection error"
@@ -422,6 +423,7 @@ router.post(
             messageId: sent.messageId
           });
         } catch (error) {
+          console.error(`Failed to send bulk email to lead ${lead.id}:`, error);
           results.push({
             leadId: lead.id,
             email: lead.email,

@@ -134,6 +134,7 @@ const EXPORT_COLUMNS = [
   { value: 'updated_at', label: 'Updated at' },
 ] as const;
 const DEFAULT_EXPORT_COLUMNS = ['sr_no', 'name', 'phone', 'email', 'status', 'priority', 'source'];
+const BULK_ACTION_LEAD_PAGE_SIZE = 200;
 
 const statusBadgeClasses: Record<ImportPreviewRow['status'], string> = {
   ready: 'bg-emerald-100 text-emerald-700',
@@ -179,6 +180,7 @@ export default function BulkActionsClient() {
   const [pageError, setPageError] = useState('');
   const [pageSuccess, setPageSuccess] = useState('');
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [leadTotal, setLeadTotal] = useState(0);
   const [counselors, setCounselors] = useState<Counselor[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -251,8 +253,12 @@ export default function BulkActionsClient() {
     setPageError('');
 
     try {
-      const [leadData, counselorData] = await Promise.all([api.getLeads(), api.getCounselors()]);
-      setLeads(leadData);
+      const [leadData, counselorData] = await Promise.all([
+        api.getLeadsPage({ page: 1, pageSize: BULK_ACTION_LEAD_PAGE_SIZE }),
+        api.getCounselors()
+      ]);
+      setLeads(leadData.items);
+      setLeadTotal(leadData.total);
       setCounselors(counselorData);
     } catch (error) {
       handleApiError(error, 'Unable to load bulk actions data');
@@ -1323,7 +1329,8 @@ export default function BulkActionsClient() {
             {activeTab === 'export' ? renderExportTab() : null}
 
             <div className="rounded-2xl border border-slate-200/70 bg-white p-5 text-sm text-slate-500 shadow-sm">
-              Live lead count: <span className="font-semibold text-slate-800">{leads.length}</span>
+              Loaded leads: <span className="font-semibold text-slate-800">{leads.length}</span>
+              {leadTotal > leads.length ? <span className="ml-1">of {leadTotal}</span> : null}
               {leads[0]?.updatedAt ? (
                 <span className="ml-2">Latest lead update: {formatDate(leads[0].updatedAt)}</span>
               ) : null}

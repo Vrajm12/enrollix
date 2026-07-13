@@ -208,10 +208,13 @@ router.get(
         includeAssignedCounselor: true,
         includeRemarks: false
       });
+      const legacyLimitRaw = Number(req.query.limit ?? pageSize) || pageSize;
+      const legacyLimit = Math.min(Math.max(legacyLimitRaw, 1), 500);
       const leads = await prisma.lead.findMany({
         where: statusWhere,
         select: leadSelect,
-        orderBy: { createdAt: "desc" }
+        orderBy: { createdAt: "desc" },
+        take: legacyLimit
       });
       return res.json(leads);
     }
@@ -220,29 +223,27 @@ router.get(
       includeAssignedCounselor: true,
       includeRemarks: false
     });
-    const [items, total, groupedCounts] = await Promise.all([
-      prisma.lead.findMany({
-        where: statusWhere,
-        select: leadSelect,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        ...(validCursor
-          ? {
-              cursor: { id: validCursor },
-              skip: 1,
-              take: pageSize
-            }
-          : {
-              skip: (page - 1) * pageSize,
-              take: pageSize
-            })
-      }),
-      prisma.lead.count({ where: statusWhere }),
-      prisma.lead.groupBy({
-        by: ["status"],
-        where,
-        _count: { _all: true }
-      })
-    ]);
+    const items = await prisma.lead.findMany({
+      where: statusWhere,
+      select: leadSelect,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...(validCursor
+        ? {
+            cursor: { id: validCursor },
+            skip: 1,
+            take: pageSize
+          }
+        : {
+            skip: (page - 1) * pageSize,
+            take: pageSize
+          })
+    });
+    const total = await prisma.lead.count({ where: statusWhere });
+    const groupedCounts = await prisma.lead.groupBy({
+      by: ["status"],
+      where,
+      _count: { _all: true }
+    });
 
     const counts = groupedCounts.reduce<Record<string, number>>((acc, row) => {
       acc[row.status] = row._count._all;
