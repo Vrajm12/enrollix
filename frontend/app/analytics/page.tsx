@@ -59,6 +59,7 @@ export default function AnalyticsPage() {
   const [districtFilter, setDistrictFilter] = useState('');
   const [localityFilter, setLocalityFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [sourceOptions, setSourceOptions] = useState<string[]>(SOURCES);
 
   const [funnelData, setFunnelData] = useState<FunnelRow[]>([]);
   const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
@@ -68,6 +69,13 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api
+      .getLeadSources()
+      .then((response) => setSourceOptions(response.sources.length > 0 ? response.sources : SOURCES))
+      .catch(() => setSourceOptions(SOURCES));
+  }, []);
 
   useEffect(() => {
     void loadReports();
@@ -311,7 +319,7 @@ export default function AnalyticsPage() {
               <label className="mb-2 block text-sm font-semibold text-slate-900">Source</label>
               <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} className="rounded-lg border border-blue-200 px-4 py-2">
                 <option value="">All sources</option>
-                {SOURCES.map((source) => (
+                {sourceOptions.map((source) => (
                   <option key={source} value={source}>
                     {source}
                   </option>

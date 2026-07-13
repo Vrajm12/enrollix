@@ -45,6 +45,7 @@ export function LeadListContent() {
   const [tenantCourseOptions, setTenantCourseOptions] = useState<string[]>([]);
   const [tenantPincodes, setTenantPincodes] = useState<string[]>([]);
   const [tenantLocalities, setTenantLocalities] = useState<string[]>([]);
+  const [tenantSources, setTenantSources] = useState<string[]>(SOURCES);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
@@ -73,6 +74,13 @@ export function LeadListContent() {
       .getLeadLocalities()
       .then((response) => setTenantLocalities(response.localities))
       .catch(() => setTenantLocalities([]));
+  }, []);
+
+  useEffect(() => {
+    void api
+      .getLeadSources()
+      .then((response) => setTenantSources(response.sources.length > 0 ? response.sources : SOURCES))
+      .catch(() => setTenantSources(SOURCES));
   }, []);
 
   const loadLeads = async () => {
@@ -160,6 +168,7 @@ export function LeadListContent() {
     leads.length > 0 && leads.every((lead) => selectedLeadIds.includes(lead.id));
   const draftCityOptions = draftStateFilter ? (CITIES_BY_STATE[draftStateFilter] ?? []) : [];
   const courseOptions = tenantCourseOptions;
+  const sourceOptions = tenantSources;
 
   const toggleSelectAllFiltered = () => {
     if (allFilteredSelected) {
@@ -318,7 +327,7 @@ export function LeadListContent() {
                     className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm"
                   >
                     <option value="">All sources</option>
-                    {SOURCES.map((source) => (
+                    {sourceOptions.map((source) => (
                       <option key={source} value={source}>
                         {source}
                       </option>

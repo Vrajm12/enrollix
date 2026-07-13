@@ -9,6 +9,11 @@ import {
   assignLeadIdsWithHistory,
   AssignmentConfirmationError
 } from "../services/leadAssignmentService.js";
+import {
+  buildLeadSourceWhere,
+  getLeadSourceFilterTerms,
+  normalizeLeadSource
+} from "../utils/leadSources.js";
 
 const router = Router();
 
@@ -49,11 +54,22 @@ const allocationSummarySchema = z.object({
 const buildLeadAllocationWhere = (
   tenantId: number,
   filters: { pincode?: string; source?: string }
-): Prisma.LeadWhereInput => ({
-  tenantId,
-  ...(filters.pincode ? { pincode: filters.pincode } : {}),
-  ...(filters.source ? { source: filters.source } : {})
-});
+): Prisma.LeadWhereInput => {
+  const andFilters: Prisma.LeadWhereInput[] = [];
+
+  if (filters.pincode) {
+    andFilters.push({ pincode: filters.pincode });
+  }
+
+  if (filters.source) {
+    andFilters.push(buildLeadSourceWhere(filters.source));
+  }
+
+  return {
+    tenantId,
+    ...(andFilters.length > 0 ? { AND: andFilters } : {})
+  };
+};
 
 const formatAllocationScope = (filters: { pincode?: string; source?: string }) => {
   const parts: string[] = [];
@@ -524,6 +540,7 @@ router.post(
     }
 
     const { userId, startLeadNumber, endLeadNumber, pincode, source, confirmReassignment } = parsed.data;
+    const normalizedSource = normalizeLeadSource(source) ?? undefined;
 
     const assignee = await prisma.user.findFirst({
       where: {
@@ -538,8 +555,8 @@ router.post(
       return res.status(404).json({ message: "Target user not found in this tenant" });
     }
 
-    const leadScopeWhere = buildLeadAllocationWhere(req.user.tenantId, { pincode, source });
-    const scopeLabel = formatAllocationScope({ pincode, source });
+    const leadScopeWhere = buildLeadAllocationWhere(req.user.tenantId, { pincode, source: normalizedSource });
+    const scopeLabel = formatAllocationScope({ pincode, source: normalizedSource });
 
     const totalScopedLeads = await prisma.lead.count({
       where: leadScopeWhere
@@ -584,7 +601,7 @@ router.post(
         confirmReassignment,
         batch: {
           pincode: pincode ?? null,
-          source: source ?? null,
+          source: normalizedSource ?? null,
           startRange: startLeadNumber,
           endRange: normalizedEnd
         },
@@ -611,7 +628,7 @@ router.post(
       batchId: assignmentResult.batchId,
       range: { startLeadNumber, endLeadNumber: normalizedEnd },
       pincode: pincode ?? null,
-      source: source ?? null,
+      source: normalizedSource ?? null,
       totalAvailableLeads: totalScopedLeads,
       assignee
     });
@@ -634,8 +651,10 @@ router.get(
     }
 
     const { pincode, source } = parsed.data;
+    const normalizedSource = normalizeLeadSource(source) ?? undefined;
+    const sourceBatchTerms = normalizedSource ? getLeadSourceFilterTerms(normalizedSource) : [];
     const totalLeads = await prisma.lead.count({
-      where: buildLeadAllocationWhere(req.user.tenantId, { pincode, source })
+      where: buildLeadAllocationWhere(req.user.tenantId, { pincode, source: normalizedSource })
     });
 
     // Get recent 2 allocations for this scope
@@ -643,7 +662,7 @@ router.get(
       where: {
         tenantId: req.user.tenantId,
         pincode: pincode ?? null,
-        source: source ?? null
+        source: normalizedSource ? { in: sourceBatchTerms } : null
       },
       select: {
         batchId: true,
@@ -678,7 +697,7 @@ router.get(
 
     return res.json({
       pincode: pincode ?? null,
-      source: source ?? null,
+      source: normalizedSource ?? null,
       totalLeads,
       availableLeads: totalLeads,
       recentAllocations: recentAllocations.map((batch) => ({

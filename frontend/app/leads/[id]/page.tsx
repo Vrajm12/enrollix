@@ -35,6 +35,7 @@ export default function LeadDetailPage() {
   const [counselors, setCounselors] = useState<Counselor[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [courseOptions, setCourseOptions] = useState<string[]>(COURSES);
+  const [sourceOptions, setSourceOptions] = useState<string[]>(SOURCES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingPriority, setSavingPriority] = useState(false);
@@ -72,6 +73,13 @@ export default function LeadDetailPage() {
     const cleaned = lead?.phone?.replace(/[^\d+]/g, "") ?? "";
     return cleaned.startsWith("+") ? cleaned.slice(1) : cleaned;
   }, [lead?.phone]);
+  const sourceOptionsWithCurrent = useMemo(() => {
+    if (leadForm.source && !sourceOptions.includes(leadForm.source)) {
+      return [leadForm.source, ...sourceOptions];
+    }
+    return sourceOptions;
+  }, [leadForm.source, sourceOptions]);
+
   const cityOptions = useMemo(() => {
     if (!leadForm.region) return [];
     const options = CITIES_BY_STATE[leadForm.region] ?? [];
@@ -89,11 +97,12 @@ export default function LeadDetailPage() {
     }
 
     try {
-      const [leadResponse, activitiesResponse, counselorResponse, courseResponse] = await Promise.all([
+      const [leadResponse, activitiesResponse, counselorResponse, courseResponse, sourceResponse] = await Promise.all([
         api.getLead(leadId),
         api.getActivities(leadId),
         api.getCounselors(),
-        api.getCourseOptions()
+        api.getCourseOptions(),
+        api.getLeadSources()
       ]);
 
       setLead(leadResponse);
@@ -119,6 +128,7 @@ export default function LeadDetailPage() {
       setActivities(activitiesResponse);
       setCounselors(counselorResponse);
       setCourseOptions(courseResponse.courseOptions.length > 0 ? courseResponse.courseOptions : COURSES);
+      setSourceOptions(sourceResponse.sources.length > 0 ? sourceResponse.sources : SOURCES);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         if (!hasSession()) {
@@ -461,7 +471,7 @@ export default function LeadDetailPage() {
                 className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
               >
                 <option value="">Select source</option>
-                {SOURCES.map((source) => (
+                {sourceOptionsWithCurrent.map((source) => (
                   <option key={source} value={source}>{source}</option>
                 ))}
               </select>

@@ -10,6 +10,7 @@ import { buildLeadSelect } from "../utils/leadCompatibility.js";
 import { env } from "../config.js";
 import { resolveTenantSlugFromRequest } from "../utils/tenantSlug.js";
 import { invalidateDashboardSummaryCache } from "../services/dashboardSummaryCache.js";
+import { normalizeLeadSource } from "../utils/leadSources.js";
 import {
   AssignmentConfirmationError,
   assertAssignmentConfirmed,
@@ -596,7 +597,7 @@ const parseRowsFromCsv = async (
             locality: rawLocality ?? (rawCity ? rawLocation : null),
             parentContact: nonEmpty(getCell("parent_contact")),
             course,
-            source: nonEmpty(getCell("source")),
+            source: normalizeLeadSource(nonEmpty(getCell("source"))),
             status: parsedStatus.value ?? LeadStatus.LEAD,
             priority: parsedPriority.value ?? Priority.COLD,
             nextFollowUp: parsedNextFollowUp.value
@@ -903,7 +904,7 @@ router.post(
                 locality: row.locality,
                 parentContact: row.parentContact,
                 course: row.course,
-                source: row.source,
+                source: normalizeLeadSource(row.source),
                 status: row.status,
                 priority: row.priority,
                 nextFollowUp: row.nextFollowUp ? new Date(row.nextFollowUp) : null,
@@ -1002,7 +1003,7 @@ router.post(
               locality: row.locality ?? null,
               parentContact: row.parentContact,
               course: row.course,
-              source: row.source,
+              source: normalizeLeadSource(row.source),
               status: row.status,
               priority: row.priority,
               nextFollowUp: row.nextFollowUp ? new Date(row.nextFollowUp) : null,

@@ -29,6 +29,7 @@ export function AddLeadModal({
   isLoading = false,
 }: AddLeadModalProps) {
   const [courseOptions, setCourseOptions] = useState<string[]>(COURSES);
+  const [sourceOptions, setSourceOptions] = useState<string[]>(SOURCES);
   const [formData, setFormData] = useState<{
     name: string;
     email: string;
@@ -82,13 +83,14 @@ export function AddLeadModal({
 
   useEffect(() => {
     if (!open) return;
-    void api
-      .getCourseOptions()
-      .then((response) => {
-        setCourseOptions(response.courseOptions.length > 0 ? response.courseOptions : COURSES);
+    void Promise.all([api.getCourseOptions(), api.getLeadSources()])
+      .then(([courseResponse, sourceResponse]) => {
+        setCourseOptions(courseResponse.courseOptions.length > 0 ? courseResponse.courseOptions : COURSES);
+        setSourceOptions(sourceResponse.sources.length > 0 ? sourceResponse.sources : SOURCES);
       })
       .catch(() => {
         setCourseOptions(COURSES);
+        setSourceOptions(SOURCES);
       });
   }, [open]);
 
@@ -185,7 +187,7 @@ export function AddLeadModal({
                   <option value="" disabled>
                     Select source (dropdown)
                   </option>
-                  {SOURCES.map((source) => (
+                  {sourceOptions.map((source) => (
                     <option key={source} value={source}>
                       {source}
                     </option>

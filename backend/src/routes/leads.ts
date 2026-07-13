@@ -12,6 +12,12 @@ import {
   logLeadAssignmentChanges
 } from "../services/leadAssignmentService.js";
 
+import {
+  buildLeadSourceWhere,
+  mergeLeadSources,
+  normalizeLeadSource
+} from "../utils/leadSources.js";
+
 const router = Router();
 
 const STUDENT_CASTE_CATEGORIES = [
@@ -157,9 +163,7 @@ router.get(
     }
 
     if (source) {
-      andFilters.push({
-        source: { contains: source, mode: "insensitive" }
-      });
+      andFilters.push(buildLeadSourceWhere(source));
     }
 
     if (pincode) {
@@ -349,12 +353,8 @@ router.get(
       orderBy: { source: "asc" }
     });
 
-    const defaultSources = ["Meta Ads", "WhatsApp", "Instagram Ads", "Google Ads"];
-    const databaseSources = rows.map((row) => row.source).filter((value): value is string => Boolean(value));
-    const allSources = Array.from(new Set([...defaultSources, ...databaseSources])).sort();
-
     return res.json({
-      sources: allSources
+      sources: mergeLeadSources(rows.map((row) => row.source))
     });
   })
 );
@@ -439,7 +439,7 @@ router.post(
           studentCasteCategory: toNullable(payload.studentCasteCategory),
           parentContact: toNullable(payload.parentContact),
           course: toNullable(payload.course),
-          source: toNullable(payload.source),
+          source: normalizeLeadSource(payload.source),
           ...(remarksSupported ? { remarks: toNullable(payload.remarks) } : {}),
           assignedTo,
           status: payload.status ?? LeadStatus.LEAD,
@@ -572,7 +572,7 @@ router.put(
           studentCasteCategory: toNullable(payload.studentCasteCategory),
           parentContact: toNullable(payload.parentContact),
           course: toNullable(payload.course),
-          source: toNullable(payload.source),
+          source: normalizeLeadSource(payload.source),
           ...(remarksSupported ? { remarks: toNullable(payload.remarks) } : {}),
           status: payload.status ?? existingLead.status,
           priority: payload.priority ?? existingLead.priority,

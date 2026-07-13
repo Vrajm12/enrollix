@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { LeadStatus, Prisma, Role } from "@prisma/client";
+import { buildLeadSourceWhere, normalizeLeadSource } from "../utils/leadSources.js";
 
 const router = Router();
 
@@ -53,9 +54,7 @@ const applyLocationFilters = (
     });
   }
   if (source) {
-    andFilters.push({
-      source: { contains: source, mode: "insensitive" }
-    });
+    andFilters.push(buildLeadSourceWhere(source));
   }
   if (andFilters.length === 0) {
     return baseWhere;
@@ -347,7 +346,7 @@ router.get(
     const sourceAnalysis: Record<string, any> = {};
 
     leads.forEach((lead) => {
-      const source = lead.source || "Unknown";
+      const source = normalizeLeadSource(lead.source) ?? "Unknown";
       if (!sourceAnalysis[source]) {
         sourceAnalysis[source] = {
           total: 0,
