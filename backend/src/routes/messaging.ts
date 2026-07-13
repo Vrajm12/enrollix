@@ -346,7 +346,7 @@ router.post(
     } else {
       if (!dryRun && !emailService.isConfigured()) {
         return res.status(400).json({
-          message: "SMTP is not configured. Set SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM."
+          message: "Email is not configured. Set EMAIL_PROVIDER=brevo_api with BREVO_API_KEY and EMAIL_FROM, or configure SMTP."
         });
       }
 
@@ -370,9 +370,9 @@ router.post(
         try {
           await emailService.verifyConnection();
         } catch (error) {
-          console.error("SMTP verification failed before bulk email send:", error);
+          console.error("Email provider verification failed before bulk email send:", error);
           return res.status(400).json({
-            message: "SMTP connection failed. Check Brevo SMTP key, authorized IP, and sender verification.",
+            message: "Email provider verification failed. If SMTP is blocked on this server, use EMAIL_PROVIDER=brevo_api with a Brevo API key.",
             error: error instanceof Error ? error.message : "Unknown SMTP connection error"
           });
         }

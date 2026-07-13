@@ -81,7 +81,15 @@ const request = async <T>(
       typeof (data as { message?: unknown }).message === "string"
         ? (data as { message: string }).message
         : "API request failed";
-    throw new ApiError(message, response.status);
+    const detail =
+      data &&
+      typeof data === "object" &&
+      "error" in data &&
+      typeof (data as { error?: unknown }).error === "string"
+        ? (data as { error: string }).error
+        : "";
+    const detailedMessage = detail && detail !== message ? `${message} ${detail}` : message;
+    throw new ApiError(detailedMessage, response.status);
   }
 
   return data as T;

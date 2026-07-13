@@ -26,6 +26,12 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),
+  // Email
+  EMAIL_PROVIDER: z.enum(["smtp", "brevo_api"]).optional(),
+  EMAIL_FROM: z.string().optional(),
+  BREVO_API_KEY: z.string().optional(),
+  BREVO_API_URL: z.string().url().default("https://api.brevo.com/v3/smtp/email"),
+  BREVO_API_TIMEOUT_MS: z.coerce.number().default(20000),
   // SMTP Email
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().default(587),
