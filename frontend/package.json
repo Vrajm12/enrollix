@@ -6,6 +6,8 @@
     "dev": "set NEXT_DISABLE_DEVTOOLS=1&& next dev",
     "dev:fast": "set NEXT_DISABLE_DEVTOOLS=1&& next dev --turbopack",
     "build": "next build",
+    "postbuild": "node scripts/verify-next-static-assets.js",
+    "check:deployed-assets": "node scripts/check-deployed-static-assets.js",
     "start": "next start"
   },
   "dependencies": {
